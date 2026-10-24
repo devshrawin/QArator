@@ -1,7 +1,7 @@
 # Changelog
 
 ## 1.2.0 · 2026-10-24
-- **Record video**: *Record tab* (one click, or Alt+Shift+R) or *Record screen* (Chrome's picker, mouse pointer shows). Saved as MP4, attached to Zoho with the screenshots, a few frames go to the AI so it can describe what happens. Up to 5 minutes.
+- **Record screen** (or Alt+Shift+R): Chrome's picker for a screen, window or tab, mouse pointer shows. Saved as MP4, attached to Zoho with the screenshots, a few frames go to the AI so it can describe what happens. Up to 5 minutes.
 - **Export to Word**: works without AI (URL, location, environment, note, steps, page errors, screenshots, video names) and with a report (title, sections, fields, suggested tags). Videos are saved next to it.
 - **Generate & next bug**: saves the bug to the new **Bug list** and writes it in the background while you capture the next one. Each bug shows Waiting / Writing / Ready / Not written / Filled in Zoho; open a ready bug to review and fill, try again on failures. Tick bugs to export **full bugs** (report and screenshots) or **notes only** (page address, screenshots, what's wrong), one Word file with a page per bug. After filling, the panel offers the next ready bug.
 - **What's wrong is required** before generating or exporting.
@@ -16,7 +16,7 @@
 - Page names in another script (e.g. Malayalam headings) are not used in the English title.
 - The draft is saved the moment the panel closes.
 - **Appearance** in Settings: theme (System / Light / Dark), text size, field glow (Off / Subtle / Strong), animations, side panel spacing. Per person, not exported. The field glow is much more visible.
-- New permissions: `tabCapture`, `desktopCapture` (recording).
+- New permission: `desktopCapture` (recording).
 
 ## 1.1.0 · 2026-10-24
 - **Auto model** (new default): picks the best image-capable model your key has and falls back to the next one when a model is rate-limited, out of daily quota or missing. Resting models are skipped until they can answer again. Fixed-model mode can keep or turn off the fallback.

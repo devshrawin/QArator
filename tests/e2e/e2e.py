@@ -163,7 +163,7 @@ try:
         panel.wait_for_timeout(800)
         # The panel acts on W1 as if docked there. Recording gets a drawn canvas instead of a real tab stream.
         PATCH = f"""() => {{ chrome.windows.getCurrent = async () => ({{ id: {W1} }});
-          chrome.tabCapture.getMediaStreamId = async () => 'fake-stream';
+          chrome.desktopCapture.chooseDesktopMedia = (sources, cb) => setTimeout(() => cb('fake-desktop'), 50);
           navigator.mediaDevices.getUserMedia = async () => {{ const c = document.createElement('canvas'); c.width = 640; c.height = 360; const x = c.getContext('2d'); let i = 0;
             setInterval(() => {{ x.fillStyle = `hsl(${{(i * 12) % 360}},70%,50%)`; x.fillRect(0, 0, 640, 360); x.fillStyle = '#000'; x.font = '40px sans-serif'; x.fillText('frame ' + i++, 40, 180); }}, 80);
             return c.captureStream(15); }}; }}"""
@@ -524,11 +524,12 @@ try:
 
         def recording():
             to_capture()
-            panel.locator("#main [data-action=record-tab]").first.click()
+            check("record: no Record tab button any more", panel.locator("[data-action=record-tab]").count() == 0)
+            panel.locator("#main [data-action=record-screen]").first.click()
             panel.wait_for_selector(".rec", timeout=5000)
             panel.wait_for_timeout(5200)
             t = panel.inner_text(".rec")
-            check("record: bar with running timer", "Recording this tab" in t and "0:0" in t, t)
+            check("record: bar with running timer", "Recording screen" in t and "0:0" in t, t)
             check("record: Write disabled while recording", panel.get_attribute("#dock [data-action=write]", "aria-disabled") == "true")
             shot("09-recording")
             panel.click("[data-action=stop-rec]")

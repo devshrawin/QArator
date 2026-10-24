@@ -44,7 +44,7 @@ Settings › AI provider › **Backup key** is used when the main key runs out o
 
 ## Videos, Word export and tags
 
-- **Record tab** (Alt+Shift+R) records the page you're testing; **Record screen** opens Chrome's picker for a screen or window and shows the mouse pointer. Recordings are MP4, up to 5 minutes, attached to Zoho with the screenshots, and the AI reads a few frames of each.
+- **Record screen** (Alt+Shift+R to start and stop) opens Chrome's picker for a screen, window or tab and shows the mouse pointer. Recordings are MP4, up to 5 minutes, attached to Zoho with the screenshots, and the AI reads a few frames of each.
 - **Export to Word** makes a .docx with the URL, location, environment, your note and steps, page errors and the screenshots; after Write it also holds the full report. No AI is needed for the export.
 - **Tags**: after filling, QArator lists the tags from your team list that fit this bug, each with a Copy button, so you add them in Zoho yourself (or turn on *Also add ticked tags in Zoho* in settings).
 - When a Zoho dropdown doesn't have QArator's value, the result shows Zoho's real options and **Use Zoho's list** updates your settings.
@@ -74,7 +74,7 @@ Page errors (console errors, uncaught exceptions, failed requests and resources)
 
 - `<all_urls>` host access: capture the visible tab, read page errors on the site under test, fill the Zoho form, and call your AI provider's API.
 - `sidePanel`, `tabs`, `scripting`, `activeTab`: open the panel, find the Zoho tab, inject the form filler.
-- `tabCapture`, `desktopCapture`: record the tab, or a screen or window you pick.
+- `desktopCapture`: record the screen, window or tab you pick.
 - `storage`, `unlimitedStorage`: settings, the current draft (with screenshots) and recent reports.
 
 ## Zoho form matching

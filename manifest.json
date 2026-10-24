@@ -35,7 +35,6 @@
     "tabs",
     "scripting",
     "activeTab",
-    "tabCapture",
     "desktopCapture"
   ],
   "host_permissions": [
@@ -71,7 +70,7 @@
       "suggested_key": {
         "default": "Alt+Shift+R"
       },
-      "description": "Start or stop recording the current tab"
+      "description": "Start or stop a screen recording"
     }
   }
 }

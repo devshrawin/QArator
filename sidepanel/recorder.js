@@ -1,6 +1,5 @@
-// Screen recording from the side panel. "tab" records the page under test with one click
-// (tabCapture); "screen" opens Chrome's picker for a screen, window or tab, so the mouse pointer
-// shows like a normal screen recording. Saves MP4 when Chrome can, otherwise WebM. While recording,
+// Screen recording from the side panel: Chrome's picker for a screen, window or tab, so the mouse
+// pointer shows like a normal screen recording. Saves MP4 when Chrome can, otherwise WebM. While recording,
 // a few frames are kept so the AI can read the video without uploading it.
 
 export const MAX_MS = 5 * 60 * 1000;
@@ -13,11 +12,7 @@ export const extFor = (mime) => (/mp4/.test(mime) ? 'mp4' : 'webm');
 
 const VIDEO = { maxWidth: 1920, maxHeight: 1080, maxFrameRate: 30 };
 
-async function streamFor(kind, tab) {
-  if (kind === 'tab') {
-    const id = await chrome.tabCapture.getMediaStreamId({ targetTabId: tab.id });
-    return navigator.mediaDevices.getUserMedia({ audio: false, video: { mandatory: { chromeMediaSource: 'tab', chromeMediaSourceId: id, ...VIDEO } } });
-  }
+async function streamFor() {
   const id = await new Promise((resolve) => chrome.desktopCapture.chooseDesktopMedia(['screen', 'window', 'tab'], (sid) => resolve(sid)));
   if (!id) { const e = new Error('cancelled'); e.cancelled = true; throw e; }
   return navigator.mediaDevices.getUserMedia({ audio: false, video: { mandatory: { chromeMediaSource: 'desktop', chromeMediaSourceId: id, ...VIDEO } } });
@@ -29,7 +24,7 @@ async function streamFor(kind, tab) {
  * `getStream` lets tests hand in a stream.
  */
 export async function startRecording(kind, tab, { onEnd, getStream } = {}) {
-  const stream = getStream ? await getStream() : await streamFor(kind, tab);
+  const stream = getStream ? await getStream() : await streamFor();
   const mime = pickMime();
   const rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 3_000_000 });
   const chunks = [];

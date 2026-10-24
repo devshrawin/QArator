@@ -424,7 +424,6 @@ let recording = null, recTick = 0;
 async function startRec(kind) {
   if (recording) return;
   const { tab } = await activeTab().catch(() => ({}));
-  if (kind === 'tab' && (!tab || !/^(https?|file):/.test(tab.url || ''))) { toast("Can't record this tab. Switch to the site you're testing first.", 3200); return; }
   try {
     recording = { kind, started: Date.now(), handle: null };
     render();
@@ -434,7 +433,7 @@ async function startRec(kind) {
     render();
   } catch (e) {
     recording = null; render();
-    if (!e.cancelled) toast(kind === 'tab' ? 'Chrome did not allow recording this tab. Click the QArator icon on that tab, then try again, or use Record screen.' : `Recording did not start: ${e.message || e}`, 4500);
+    if (!e.cancelled) toast(`Recording did not start: ${e.message || e}`, 4500);
   }
 }
 async function stopRec() {
@@ -452,7 +451,7 @@ async function stopRec() {
 function recBar() {
   if (!recording) return '';
   const s = recording.handle ? fmtDur(Date.now() - recording.started) : 'starting';
-  return `<div class="rec" role="status"><span class="dotr" aria-hidden="true"></span><span style="flex:1">Recording ${recording.kind === 'tab' ? 'this tab' : 'screen'} · <span id="rec-t">${s}</span></span>
+  return `<div class="rec" role="status"><span class="dotr" aria-hidden="true"></span><span style="flex:1">Recording screen · <span id="rec-t">${s}</span></span>
     <button type="button" class="btn b-pri b-sm" data-action="stop-rec">Stop</button></div>`;
 }
 function startRecTimer() {
@@ -479,8 +478,7 @@ const videosHtml = () => (st.videos.length ? `<div><div class="lbl">Videos <span
     <button type="button" class="btn b-ghost b-sm" data-action="play-video" data-id="${v.id}" aria-label="Play video ${i + 1}">Play</button>
     <button type="button" class="btn b-ghost b-sm" data-action="remove-video" data-id="${v.id}" aria-label="Remove video ${i + 1}">${icon.trash}Remove</button>
   </div><div class="hint">${fmtSize(v.size)}</div></div>`).join('')}</div></div>` : '');
-const recButtons = (sm = true) => `<button type="button" class="btn b-ghost ${sm ? 'b-sm' : ''}" data-action="record-tab" title="Record this tab (Alt+Shift+R)" ${recording ? 'disabled' : ''}>${icon.video}Record tab</button>
-  <button type="button" class="btn b-ghost ${sm ? 'b-sm' : ''}" data-action="record-screen" title="Record a screen or window, with the mouse pointer" ${recording ? 'disabled' : ''}>${icon.screen}Record screen</button>`;
+const recButtons = (sm = true) => `<button type="button" class="btn b-ghost ${sm ? 'b-sm' : ''}" data-action="record-screen" title="Record a screen, window or tab, with the mouse pointer (Alt+Shift+R)" ${recording ? 'disabled' : ''}>${icon.screen}Record screen</button>`;
 
 // Three steps, always visible: where you are and where you can go back to.
 function renderFlow() {
@@ -525,7 +523,7 @@ async function renderEmpty() {
   <p class="hint" style="margin:4px 0 0">QArator saves the visible part of the tab with its URL and browser details${S.pageErrors ? ' and page errors' : ''}.</p></div>
   <div class="stack">
     <button type="button" class="btn b-acc wide" data-action="capture" style="height:44px;font-size:14px">${icon.capture} Capture visible area <span class="kbd" style="margin-left:4px">Alt+Shift+S</span></button>
-    <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px">${recButtons(false).replace(/btn b-ghost/g, 'btn b-sec')}</div>
+    ${recButtons(false).replace('btn b-ghost', 'btn b-sec wide')}
     <button type="button" class="btn b-sec wide" data-action="file">${icon.image} Add image from file</button>
   </div>
   <div class="drop-hint">${icon.paste}
@@ -935,7 +933,6 @@ document.addEventListener('click', async (e) => {
     case 'bugs-clear-filled': { const ids = (await loadBugs()).filter((b) => b.status === 'filled').map((b) => b.id); await removeBugs(ids); ids.forEach((x) => bugSel.delete(x)); pruneUnused(); return; }
     case 'next-ready': { const b = (await loadBugs()).find((x) => x.status === 'ready'); if (b) return openBug(b.id); return; }
     case 'use-zoho-options': return useZohoOptions(b.dataset.name);
-    case 'record-tab': return startRec('tab');
     case 'record-screen': return startRec('screen');
     case 'stop-rec': return stopRec();
     case 'play-video': return playVideo(id);
@@ -1054,7 +1051,7 @@ chrome.tabs.onActivated.addListener(async ({ tabId }) => {
 });
 chrome.runtime.onMessage.addListener((msg) => {
   if (msg && msg.type === 'qarator:capture') { chrome.storage.session.remove('pendingCapture').catch(() => {}); captureTab(); }
-  if (msg && msg.type === 'qarator:record') { if (recording) stopRec(); else startRec('tab'); }
+  if (msg && msg.type === 'qarator:record') { if (recording) stopRec(); else startRec('screen'); }
 });
 
 // ---------- start ----------
