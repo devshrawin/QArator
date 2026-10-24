@@ -14,10 +14,25 @@ Edge works the same way at `edge://extensions`.
 
 ## First-time setup
 
-1. Settings › **AI provider and key**: Google Gemini is selected by default (use your Google AI Studio key); Anthropic, OpenAI or an OpenAI-compatible endpoint also work. Paste your key, press **Check key and load models**, and pick a model that can read images.
-2. Settings › **Title format** and **URL rules**: set the project code (default `UR`) and map URL fragments to portal, module and page names.
-3. Settings › **Zoho fill options**: set your Zoho Projects address (default `projects.zoho.in`) and check that the field labels match the text in your Submit Issue form.
-4. Settings › **Export format** to share the setup with the team; teammates use **Import format**. The API key is never exported.
+A setup page opens when QArator is installed (it can be run again from Settings › **Run setup again**):
+
+1. **Connect an AI provider**: Google Gemini is selected by default (free key from Google AI Studio); Anthropic, OpenAI or an OpenAI-compatible endpoint also work. **Test key** checks it and shows which models Auto will use.
+2. **Your team's format**: import a teammate's format file, or set the project code (default `UR`) and your Zoho Projects address (**Find it from an open Zoho tab** fills it in).
+3. **Try it**: shortcuts and pinning.
+
+Everything else (sections, fields, tags, Zoho labels, style example) is in Settings. **Export format** shares the setup with the team; the API key is never exported.
+
+## Models: Auto
+
+The model is **Auto** by default. Auto loads your key's model list and tries the everyday image-capable model first (for Gemini: the Flash models, then Flash-Lite, then Pro). When a model is rate-limited, out of daily quota or not found, QArator lets it rest (until midnight Pacific for daily quotas) and writes with the next one; the review screen says which model wrote the report. You can still pick one model, with or without falling back to the others.
+
+## Usage
+
+Settings › **Usage** counts every request per model for today, 7 or 30 days: requests, failures (rate limits), tokens in and out, an estimated cost in rupees if it were paid, and how much of a daily limit is left when the provider has reported one. The panel shows a one-line warning when a model is near its limit or resting. Counts stay in this browser.
+
+## Where the bug is
+
+The **URL** section always carries the address of the page you captured (or the tab you're on when there's no screenshot). Portal, Module and Page for the title are read from that page: the host name (for example `...-department-portal.` gives *Department Portal*), the breadcrumb, the highlighted menu item, the selected tab and the heading. URL rules in Settings still win when one matches, and the AI fills anything left empty. All of it is editable in review.
 
 ## Daily use
 
@@ -55,10 +70,12 @@ QArator first looks for Zoho Projects' own field components (`ruc-field` with it
 manifest.json          MV3 manifest
 background.js          opens the panel, keyboard commands
 sidepanel/             the panel UI and markup editor
-options/               the settings page
+options/               the settings page and first-run setup (welcome.html)
 content/errors-*.js    page error collection (page world + isolated bridge)
+content/page-hints.js  breadcrumb / menu / tab / heading for Module and Page
 content/zoho-fill.js   Zoho Submit Issue form filler (injected on demand)
-lib/                   settings, AI providers, report builder, shared styles
+lib/                   settings, AI providers and Auto model, usage tally, report builder, shared styles
+tests/e2e/             end-to-end tests (Playwright, mocked AI and Zoho form)
 lib/thinking-orbs.js   loading animation (MIT, Jakub Antalik)
 lib/border-beam.css    focus glow on type boxes (MIT, Jakub Antalik)
 ```

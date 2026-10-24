@@ -1,13 +1,15 @@
 // QArator settings page. Edits a copy of the settings and autosaves.
 import { loadSettings, saveSettings, normalize, exportFormat, importFormat, DEFAULTS, PROVIDERS, LAYOUTS, SEGMENTS, slug } from '../lib/settings.js';
-import { listModels, describeError } from '../lib/ai.js';
+import { listModels, describeError, rankModels, cooldowns, AUTO } from '../lib/ai.js';
+import { summarize, parsePrices, rowCost, rupees, nextQuotaReset, istClock, usedToday } from '../lib/usage.js';
 import { buildTitle } from '../lib/report.js';
 import { esc, icon, beam, orb, markSvg, applyTheme, watchTheme, toast, fmtTime } from '../lib/ui.js';
 
 const $ = (s, r = document) => r.querySelector(s);
 const main = $('#main');
 let S;
-let keyShown = false, modelStatus = null, undoImport = null, undoTimer = 0;
+let keyShown = false, modelStatus = null, undoImport = null, undoTimer = 0, keyTimer = 0;
+let U = { usage: {}, learnedLimits: {}, cool: {} }, usageDays = 1;
 
 // ---------- saving ----------
 let t = 0;
@@ -49,13 +51,76 @@ function secAI() {
     <button type="button" class="btn b-sec" data-act="check" ${st === 'busy' ? 'aria-disabled="true"' : ''}>${st === 'busy' ? orb('connecting', 20) + 'Checking…' : icon.refresh + 'Check key and load models'}</button>
     <span role="status" aria-live="polite">${st && st !== 'busy' ? (st.ok ? `<span class="status">${icon.check}Key works. ${st.count} model${st.count === 1 ? '' : 's'} loaded.</span>` : `<span class="status bad">${icon.alert}${esc(st.msg)}</span>`) : ''}</span>
   </div>
-  <div style="max-width:400px"><label class="lbl" for="model">Model</label>
-    ${models.length
-      ? `<select id="model" class="field" data-path="ai.model">${(models.some((m) => m.id === S.ai.model) || !S.ai.model ? models : [{ id: S.ai.model, label: S.ai.model }, ...models]).map((m) => `<option value="${esc(m.id)}" ${m.id === S.ai.model ? 'selected' : ''}>${esc(m.label === m.id ? m.id : `${m.label} · ${m.id}`)}</option>`).join('')}</select>`
-      : B(`<input id="model" class="field mono" data-path="ai.model" value="${esc(S.ai.model)}" placeholder="Press Check key, or type a model id">`)}
-    <div class="hint" style="margin-top:4px">Pick a model that can read images.</div></div>
+  ${modelPicker()}
   <p class="hint" style="margin:0">Your key is stored only in this browser and sent only to the provider above. It is never included in an export.</p>
   </section>`;
+}
+
+function modelPicker() {
+  const models = S.ai.models || [];
+  const auto = !S.ai.model || S.ai.model === AUTO;
+  const list = models.some((m) => m.id === S.ai.model) || auto ? models : [{ id: S.ai.model, label: S.ai.model }, ...models];
+  const order = rankModels(S.ai.provider, models).slice(0, 4);
+  const autoHint = !models.length ? 'Auto loads your key\'s models the first time it writes, or press Check key now.'
+    : order.length ? `Auto tries ${order.map(esc).join(', then ')}. A model that hits its limit rests until it can answer again.` : 'No image-capable model found for this key.';
+  return `<div class="g2">
+    <div><label class="lbl" for="model">Model</label>
+      <select id="model" class="field" data-path="ai.model" data-type="model">
+        <option value="${AUTO}" ${auto ? 'selected' : ''}>Auto (recommended)</option>
+        ${list.map((m) => `<option value="${esc(m.id)}" ${m.id === S.ai.model ? 'selected' : ''}>${esc(m.label === m.id ? m.id : `${m.label} · ${m.id}`)}</option>`).join('')}
+      </select>
+      <div class="hint" style="margin-top:4px">${auto ? autoHint : 'Pick a model that can read images.'}</div></div>
+    ${!models.length && S.ai.provider !== 'gemini' ? `<div><label class="lbl" for="model-id">Or type a model id</label>${B(`<input id="model-id" class="field mono" data-path="ai.model" value="${auto ? '' : esc(S.ai.model)}" placeholder="model-id">`)}</div>` : ''}
+  </div>
+  ${auto ? '' : `<label class="chk"><input type="checkbox" data-type="bool" data-path="ai.fallback" ${S.ai.fallback !== false ? 'checked' : ''}><span>When this model is busy or out of quota, use the next best one<br><span class="hint">The report says which model wrote it.</span></span></label>`}`;
+}
+
+function secUsage() {
+  const rows = summarize(U.usage, usageDays);
+  const own = parsePrices(S.usage.prices);
+  const rate = S.usage.usdInr;
+  const RANGE = { 1: 'today', 7: 'in the last 7 days', 30: 'in the last 30 days' };
+  const KIND = { write: 'Write report', rewrite: 'Rewrite section' };
+  const fmtN = (n) => (n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${(n / 1e3).toFixed(1)}k` : String(n));
+  let usd = 0, assumed = false;
+  const body = rows.map((r) => {
+    const c = rowCost(r, own);
+    if (c) { usd += c.usd; assumed ||= c.assumed; }
+    const limit = U.learnedLimits[r.model];
+    let left = usageDays === 1 ? '<span class="hint">No known limit</span>' : '';
+    if (usageDays === 1 && limit) {
+      const remaining = Math.max(0, limit - usedToday(U.usage, r.model));
+      const pct = Math.round((remaining / limit) * 100);
+      left = `<div class="meter" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}" aria-label="${esc(r.model)} left today"><i class="${pct === 0 ? 's' : pct <= 20 ? 'q' : ''}" style="width:${pct}%"></i></div><div class="hint">${remaining} of ${limit} left</div>`;
+    }
+    if (U.cool[r.model]) left += `<div class="hint" style="color:var(--acc-text)">Resting until ${istClock(U.cool[r.model])}</div>`;
+    return `<tr><td><strong style="font-weight:600">${esc(r.model)}</strong><div class="hint">${esc(r.provider)}</div></td><td>${KIND[r.kind] || esc(r.kind)}</td>
+      <td class="num">${r.req}</td><td class="num">${r.fail ? `${r.fail}${r.rl ? ` (${r.rl} limit)` : ''}` : '0'}</td>
+      <td class="num">${r.tin || r.tout ? `${fmtN(r.tin)} / ${fmtN(r.tout)}` : '–'}</td>
+      <td class="num">${c ? `${c.assumed ? '~' : ''}${rupees(c.usd, rate)}` : '–'}</td><td>${left}</td></tr>`;
+  }).join('');
+  const reqs = rows.reduce((a, r) => a + r.req, 0);
+  return `<section class="sec" id="usage">
+  <div><div><h2>Usage</h2><p class="desc">Every request QArator sends to your AI provider, counted in this browser. Providers do not report free quota left, so limits are learned from their rate-limit replies.</p></div></div>
+  <div class="row" role="group" aria-label="Range">${[1, 7, 30].map((d) => `<button type="button" class="btn ${usageDays === d ? 'b-pri' : 'b-sec'} b-sm" data-act="usage-days" data-i="${d}" aria-pressed="${usageDays === d}">${d === 1 ? 'Today' : `${d} days`}</button>`).join('')}</div>
+  <div class="tbl-wrap"><table class="tbl" id="usage-table" style="min-width:720px"><thead><tr><th scope="col">Model</th><th scope="col">Used for</th><th scope="col" class="num">Requests</th><th scope="col" class="num">Failed</th><th scope="col" class="num">Tokens in / out</th><th scope="col" class="num">Cost if paid</th><th scope="col" style="width:150px">${usageDays === 1 ? 'Left today' : ''}</th></tr></thead>
+  <tbody>${body || '<tr><td colspan="7" class="hint">Nothing yet. Counts start with your next report.</td></tr>'}</tbody></table></div>
+  <div class="row" id="usage-totals" style="gap:6px 18px"><strong>Total ${RANGE[usageDays]}</strong><span>${reqs} request${reqs === 1 ? '' : 's'}</span>
+    <span>If paid: about ${rupees(usd, rate)}${assumed ? ' (list prices assumed)' : ''}</span>
+    <span class="hint" style="margin-left:auto">Daily quotas reset at ${istClock(nextQuotaReset())} (midnight Pacific)</span></div>
+  <details><summary class="hint" style="cursor:pointer">Prices and exchange rate</summary>
+    <div class="g2" style="margin-top:10px">
+      <div><label class="lbl" for="uprices">Your prices (USD per million tokens)</label>${B(`<textarea id="uprices" class="field mono" rows="3" data-path="usage.prices" placeholder="gemini-2.5-flash=0.30,2.50">${esc(S.usage.prices)}</textarea>`)}
+        <div class="hint" style="margin-top:4px">One model per line: model=input,output. Others use rough list prices.</div></div>
+      <div><label class="lbl" for="urate">Rupees per US dollar</label>${B(`<input id="urate" class="field" type="number" min="1" data-type="number" data-path="usage.usdInr" value="${esc(rate)}">`)}</div>
+    </div></details>
+  <div><button type="button" class="btn b-ghost" data-act="usage-reset" style="margin-left:-8px">Reset counters</button></div>
+  </section>`;
+}
+
+async function loadUsage() {
+  const { usage = {}, learnedLimits = {} } = await chrome.storage.local.get(['usage', 'learnedLimits']);
+  U = { usage, learnedLimits, cool: await cooldowns() };
 }
 
 function secLength() {
@@ -193,7 +258,7 @@ function secShare() {
 
 function render() {
   const y = scrollY;
-  main.innerHTML = secAI() + secLength() + secTitle() + secSections() + secFields() + secTags() + secStyle() + secZoho() + secShare();
+  main.innerHTML = secAI() + secLength() + secTitle() + secSections() + secFields() + secTags() + secStyle() + secZoho() + secUsage() + secShare();
   applyTheme();
   scrollTo(0, y);
 }
@@ -207,7 +272,12 @@ document.addEventListener('input', (e) => {
   if (el.dataset.type === 'list') v = String(v).split(',').map((x) => x.trim()).filter(Boolean);
   if (el.type === 'radio' && !el.checked) return;
   setPath(path, v);
-  if (path === 'ai.apiKey' || path === 'ai.provider' || path === 'ai.baseUrl') modelStatus = null;
+  if (path === 'ai.apiKey' || path === 'ai.provider' || path === 'ai.baseUrl') {
+    modelStatus = null;
+    clearTimeout(keyTimer);
+    const ready = S.ai.provider === 'compatible' ? /^https?:\/\/.+/.test(S.ai.baseUrl) : String(S.ai.apiKey).trim().length >= 20;
+    if (ready && path !== 'ai.provider') keyTimer = setTimeout(checkKey, 900);
+  }
   if (el.dataset.live === 'example') $('#ex-title').textContent = exampleTitle();
   save();
 });
@@ -215,7 +285,9 @@ document.addEventListener('change', (e) => {
   const el = e.target;
   if (el.id === 'import-file') return doImport(el);
   if (!el.dataset.path) return;
-  if (el.dataset.path === 'ai.provider') { S.ai.models = []; S.ai.model = ''; save(); render(); return; }
+  if (el.dataset.path === 'ai.provider') { S.ai.models = []; S.ai.model = AUTO; save(); render(); return; }
+  if (el.dataset.type === 'model') { save(); render(); return; }
+  if (el.dataset.path.startsWith('usage.')) { render(); return; }
   if (el.dataset.rerenderBlur) {
     const i = Number(el.dataset.path.split('.')[1]); const f = S.fields[i];
     if (f && !f.options.includes(f.default)) { f.default = f.options[0] || ''; save(); }
@@ -255,6 +327,11 @@ document.addEventListener('click', async (e) => {
       S.fields.push({ id, name: 'New field', zohoLabel: 'New field', options: ['Option 1', 'Option 2'], default: 'Option 1', ai: false }); break;
     }
     case 'tag-del': S.tags.list.splice(i, 1); break;
+    case 'usage-days': usageDays = i; render(); return;
+    case 'usage-reset':
+      if (!confirm('Reset the usage counters? This only clears QArator\'s own tally.')) return;
+      await chrome.storage.local.remove(['usage', 'learnedLimits', 'modelCooldown']);
+      await loadUsage(); render(); return;
     case 'export': return doExport();
     case 'import': return $('#import-file').click();
     case 'reset': {
@@ -272,7 +349,7 @@ async function checkKey() {
   try {
     const models = await listModels(S.ai);
     S.ai.models = models;
-    if (!models.some((m) => m.id === S.ai.model)) {
+    if (S.ai.model !== AUTO && !models.some((m) => m.id === S.ai.model)) {
       const pref = models.find((m) => /sonnet|gpt-4\.1|gpt-4o|gemini-.*flash|gemini-.*pro/.test(m.id)) || models[0];
       S.ai.model = pref ? pref.id : S.ai.model;
     }
@@ -321,8 +398,12 @@ addEventListener('scroll', navSpy, { passive: true });
 (async function start() {
   $('#mark').innerHTML = markSvg(24);
   S = await loadSettings();
+  await loadUsage();
   render();
   navSpy();
+  chrome.storage.onChanged.addListener(async (c, area) => {
+    if (area === 'local' && (c.usage || c.learnedLimits || c.modelCooldown)) { await loadUsage(); render(); }
+  });
   watchTheme();
   if (location.hash) document.querySelector(location.hash)?.scrollIntoView();
 })();

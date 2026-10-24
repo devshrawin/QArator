@@ -18,7 +18,8 @@
       url: location.href,
       title: document.title,
       viewport: { w: window.innerWidth, h: window.innerHeight, dpr: window.devicePixelRatio || 1 },
-      errors: errors.slice()
+      errors: errors.slice(),
+      hints: globalThis.__qaratorHints ? globalThis.__qaratorHints() : null
     });
   });
 })();

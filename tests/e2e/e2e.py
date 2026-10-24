@@ -9,6 +9,7 @@ PORT = int(sys.argv[3]) if len(sys.argv) > 3 else 8765
 HERE = os.path.dirname(os.path.abspath(__file__))
 ANSWER = json.load(open(os.path.join(HERE, "answer.json"), encoding="utf-8"))
 ANS = json.dumps(ANSWER)
+sys.stdout.reconfigure(encoding="utf-8")
 results, logs = [], []
 mode = {"v": "ok"}
 seen = {"gemini": [], "anthropic": [], "openai": []}
@@ -27,8 +28,16 @@ def phase(fn):
         traceback.print_exc()
 
 
-def err_body(provider):
+def err_body(provider, url=""):
     m = mode["v"]
+    if m == "quota_flash" and "gemini-2.5-flash:" in url:
+        return 429, {"error": {"code": 429, "status": "RESOURCE_EXHAUSTED",
+            "message": "You exceeded your current quota. Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 20, model: gemini-2.5-flash\nPlease retry in 39.2s.",
+            "details": [{"@type": "type.googleapis.com/google.rpc.QuotaFailure", "violations": [{"quotaId": "GenerateRequestsPerDayPerProjectPerModel-FreeTier"}]}]}}, {}
+    if m == "dead_flash" and "gemini-2.5-flash:" in url:
+        return 404, {"error": {"code": 404, "message": "models/gemini-2.5-flash is not found for API version v1beta", "status": "NOT_FOUND"}}, {}
+    if m in ("quota_flash", "dead_flash"):
+        return None
     if m == "429":
         return 429, {"error": {"code": 429, "message": "Resource has been exhausted (e.g. check quota).", "status": "RESOURCE_EXHAUSTED"}}, {"retry-after": "7"}
     if m == "badkey":
@@ -59,7 +68,7 @@ def make_route(provider):
                 body = {"data": [{"id": "gpt-4.1"}, {"id": "gpt-4o-mini-tts"}, {"id": "text-embedding-3-small"}]}
             return route.fulfill(status=200, headers=hdr, body=json.dumps(body))
         seen[provider].append({"url": url, "headers": req.headers, "body": req.post_data_json})
-        e = err_body(provider)
+        e = err_body(provider, url)
         if e:
             st, b, extra = e
             text = "Sorry, I can't help with that." if b is None else json.dumps(b)
@@ -69,7 +78,7 @@ def make_route(provider):
                 text = json.dumps(b)
             return route.fulfill(status=st, headers={**hdr, **extra}, body=text)
         if provider == "gemini":
-            b = {"candidates": [{"content": {"parts": [{"text": ANS}]}}]}
+            b = {"candidates": [{"content": {"parts": [{"text": ANS}]}}], "usageMetadata": {"promptTokenCount": 1200, "candidatesTokenCount": 300}}
         elif provider == "anthropic":
             b = {"content": [{"type": "text", "text": "Here is the report:\n" + ANS}]}
         else:
@@ -104,7 +113,11 @@ try:
             }""", patch)
 
         # ---- site under test in window W1
-        site = ctx.pages[0] if ctx.pages else ctx.new_page()
+        def welcome_opened():
+            urls = sw.evaluate("""async () => { for (let i = 0; i < 40; i++) { const t = await chrome.tabs.query({}); if (t.some((x) => /welcome\.html/.test(x.url || x.pendingUrl || ''))) return t.map((x) => x.url || x.pendingUrl); await new Promise((r) => setTimeout(r, 200)); } return (await chrome.tabs.query({})).map((x) => x.url); }""")
+            check("setup: welcome tab opens on install", any("welcome.html" in u for u in urls), str(urls))
+        phase(welcome_opened)
+        site = ctx.new_page()
         site.on("console", lambda m: None)
         site.goto(f"{BASE}/test.html")
         site.wait_for_timeout(1200)
@@ -123,8 +136,6 @@ try:
             print("\n  ".join(["collected:"] + msgs))
         phase(errors_collected)
 
-        set_settings({"ai": {"provider": "gemini", "apiKey": "test-gemini-key", "model": "gemini-2.5-flash", "baseUrl": ""}})
-
         # ---- panel in its own window; it acts on W1 as if docked there
         with ctx.expect_page() as pi:
             sw.evaluate(f"() => chrome.windows.create({{url: '{PANEL}', type: 'normal', width: 420, height: 900}})")
@@ -137,6 +148,34 @@ try:
         PATCH = f"() => {{ chrome.windows.getCurrent = async () => ({{ id: {W1} }}); }}"
         panel.evaluate(PATCH)
         sw.evaluate(f"() => chrome.tabs.update({T1}, {{active: true}})")
+
+        def clear_cool():
+            sw.evaluate("() => chrome.storage.local.remove(['modelCooldown', 'modelCache'])")
+
+        def onboarding():
+            t = panel.inner_text("#main")
+            check("setup: panel shows setup card before a key is set", "Set up QArator" in t, t[:120])
+            wz = next(pg for pg in ctx.pages if "welcome.html" in pg.url)
+            wz.on("pageerror", lambda e: logs.append(f"[welcome] PAGEERROR: {e}"))
+            wz.click("[data-go=next]")
+            wz.fill("#key", "test-gemini-key-000000000000")
+            wz.click("[data-go=test]")
+            wz.wait_for_selector("#key-status .status", timeout=10000)
+            st = wz.inner_text("#key-status")
+            check("setup: key tested, Auto order shown", "Auto will use gemini-2.5-flash" in st, st)
+            wz.screenshot(path=os.path.join(OUT, "00-setup-key.png"))
+            wz.click("#next")
+            wz.fill("#proj", "UR"); wz.press("#proj", "Tab")
+            wz.click("#next")
+            wz.click("#next")
+            wz.wait_for_selector("text=All set")
+            ob = sw.evaluate("async () => (await chrome.storage.local.get(['onboarded', 'settings']))")
+            check("setup: finish saves onboarded + key + Auto", ob.get("onboarded") and ob["settings"]["ai"]["apiKey"] == "test-gemini-key-000000000000" and ob["settings"]["ai"]["model"] == "auto", str(ob["settings"]["ai"])[:200])
+            panel.wait_for_timeout(500)
+            check("setup: card gone after setup", "Set up QArator" not in panel.inner_text("#main"))
+        phase(onboarding)
+        set_settings({"ai": {"provider": "gemini", "apiKey": "test-gemini-key", "model": "gemini-2.5-flash", "baseUrl": ""}})
+        panel.wait_for_timeout(300)
 
         def to_capture():
             if panel.locator("[data-action=back-capture]").count():
@@ -156,6 +195,8 @@ try:
             check("capture: page URL shown", "/test.html" in txt)
             check("capture: page errors chip", "page error" in txt and "captured" in txt, [l for l in txt.split("\n") if "error" in l][:3])
             check("capture: env chips (browser/os/viewport)", "Viewport" in txt, txt.split("Viewport")[0][-60:] if "Viewport" in txt else txt[:200])
+            where = panel.inner_text("#where") if panel.locator("#where").count() else ""
+            check("location: module/page read from breadcrumb", "SEVI Dashboard › State Overview" in where, where)
             shot("01-captured")
         phase(capture)
 
@@ -211,6 +252,7 @@ try:
             check("error 429: retry button disabled during countdown", panel.get_attribute("#retry", "aria-disabled") == "true")
             shot("03-ratelimit")
             panel.click("[data-action=dismiss-error]")
+            clear_cool()
             t = attempt("badkey")
             check("error gemini bad key (HTTP 400): says key rejected", "key was rejected" in t.lower(), t[:160].replace("\n", " | "))
             panel.click("[data-action=dismiss-error]")
@@ -255,8 +297,75 @@ try:
             panel.wait_for_timeout(300)
         phase(other_providers)
 
+        def auto_model():
+            clear_cool()
+            set_settings({"ai": {"provider": "gemini", "apiKey": "test-gemini-key", "model": "auto", "baseUrl": "", "models": []}})
+            panel.wait_for_timeout(300)
+            mode["v"] = "quota_flash"
+            n0 = len(seen["gemini"])
+            to_capture()
+            panel.click("#dock [data-action=write]")
+            panel.wait_for_selector("#title-preview", timeout=15000)
+            hdr = panel.inner_text("#main").split("\n")[1:3]
+            tried = [r["url"].split("models/")[1].split(":")[0] for r in seen["gemini"][n0:]]
+            check("auto: tries flash first, falls back to pro on daily quota", tried == ["gemini-2.5-flash", "gemini-2.5-pro"], str(tried))
+            check("auto: review says which model wrote it", any("Written by gemini-2.5-pro" in h for h in hdr), str(hdr))
+            st = sw.evaluate("async () => chrome.storage.local.get(['modelCooldown', 'learnedLimits', 'usage'])")
+            until = st.get("modelCooldown", {}).get("gemini-2.5-flash", 0)
+            check("auto: flash rests until the daily reset (> 1 h)", until - time.time() * 1000 > 3600000, str(until))
+            check("auto: daily limit learned from the 429", st.get("learnedLimits", {}).get("gemini-2.5-flash") == 20, str(st.get("learnedLimits")))
+            n1 = len(seen["gemini"])
+            to_capture()
+            panel.wait_for_timeout(400)
+            note = panel.inner_text("#dock")
+            check("usage chip: panel says flash is resting", "gemini-2.5-flash" in note and "resting until" in note, note[-200:])
+            panel.click("#dock [data-action=write]")
+            panel.wait_for_selector("#title-preview", timeout=15000)
+            tried = [r["url"].split("models/")[1].split(":")[0] for r in seen["gemini"][n1:]]
+            check("auto: resting model skipped on next write", tried == ["gemini-2.5-pro"], str(tried))
+            clear_cool()
+            mode["v"] = "dead_flash"
+            n2 = len(seen["gemini"])
+            to_capture()
+            panel.click("#dock [data-action=write]")
+            panel.wait_for_selector("#title-preview", timeout=15000)
+            tried = [r["url"].split("models/")[1].split(":")[0] for r in seen["gemini"][n2:]]
+            check("auto: 404 model skipped, next model writes", tried == ["gemini-2.5-flash", "gemini-2.5-pro"], str(tried))
+            mode["v"] = "ok"
+            clear_cool()
+            set_settings({"ai": {"model": "gemini-2.5-flash", "fallback": False}})
+            panel.wait_for_timeout(300)
+            mode["v"] = "quota_flash"
+            to_capture()
+            panel.click("#dock [data-action=write]")
+            panel.wait_for_selector(".alert", timeout=15000)
+            check("fixed model, fallback off: shows rate limit instead of switching", "busy" in panel.inner_text("#main"))
+            mode["v"] = "ok"
+            clear_cool()
+            sw.evaluate("() => chrome.storage.local.remove('learnedLimits')")
+            set_settings({"ai": {"model": "auto", "fallback": True}})
+            panel.wait_for_timeout(300)
+            to_capture()
+        phase(auto_model)
+
+        def no_screenshot_url():
+            panel.evaluate("() => chrome.storage.local.remove('draft')")
+            panel.reload(); panel.wait_for_timeout(800); panel.evaluate(PATCH)
+            panel.click("[data-action=noshot]")
+            panel.fill("#note", "Export button does nothing")
+            panel.click("#dock [data-action=write]")
+            panel.wait_for_selector("#title-preview", timeout=15000)
+            url = panel.input_value("#sec-url_note")
+            check("no screenshot: URL section still has the page address", url.startswith(f"{BASE}/test.html"), url)
+            check("no screenshot: module/page from the page", panel.input_value("#seg-module") == "SEVI Dashboard" and panel.input_value("#seg-page") == "State Overview",
+                  panel.input_value("#seg-module") + " / " + panel.input_value("#seg-page"))
+        phase(no_screenshot_url)
+
         def markup():
             to_capture()
+            if not panel.locator("[data-action=markup]").count():
+                panel.click("[data-action=capture]")
+                panel.wait_for_selector("[data-action=markup]", timeout=8000)
             panel.click("[data-action=markup]")
             panel.wait_for_selector("#mk-canvas")
             panel.wait_for_timeout(300)
@@ -398,14 +507,21 @@ try:
             op.click("[data-act=check]")
             op.wait_for_timeout(1500)
             opts = op.locator("#model option").all_inner_texts()
-            check("options: Check key loads Gemini models (embedding filtered)", len(opts) == 2 and not any("embedding" in o for o in opts), str(opts))
+            check("options: Check key loads Gemini models (embedding filtered)", len(opts) == 3 and opts[0] == "Auto (recommended)" and not any("embedding" in o for o in opts), str(opts))
+            op.locator("#usage").scroll_into_view_if_needed()
+            ut = op.inner_text("#usage")
+            op.locator("#usage").screenshot(path=os.path.join(OUT, "08-usage.png"))
+            print("  usage section:\n   " + ut.replace("\n", "\n   ")[:1500])
+            check("usage: rows per model with requests and failures", "gemini-2.5-pro" in ut and "gemini-2.5-flash" in ut and "limit)" in ut, ut[:300])
+            check("usage: tokens and rupee cost shown", "3.6k / 900" in ut and "~\u20b9" in ut, ut[:300])
+            op.click("[data-act=usage-days][data-i='7']")
+            check("usage: 7-day range", "last 7 days" in op.inner_text("#usage"))
             op.select_option("#prov", "openai")
             op.wait_for_timeout(300)
-            op.fill("#key", "sk-test")
-            op.click("[data-act=check]")
-            op.wait_for_timeout(1500)
+            op.fill("#key", "sk-test-0000000000000000000000")
+            op.wait_for_timeout(2500)
             opts = op.locator("#model option").all_inner_texts()
-            check("options: OpenAI models filtered to chat/vision", opts == ["gpt-4.1"], str(opts))
+            check("options: OpenAI models load by themselves, Auto first", opts == ["Auto (recommended)", "gpt-4.1"], str(opts))
             op.fill("#tproj", "UR2")
             op.wait_for_timeout(600)
             with op.expect_download() as dl:
@@ -417,7 +533,7 @@ try:
             imp = os.path.join(OUT, "import.json"); json.dump(data, open(imp, "w"))
             op.set_input_files("#import-file", imp)
             op.wait_for_timeout(800)
-            check("import: applies format, keeps key", op.input_value("#tproj") == "IMPORTED" and op.input_value("#key") == "sk-test")
+            check("import: applies format, keeps key", op.input_value("#tproj") == "IMPORTED" and op.input_value("#key") == "sk-test-0000000000000000000000")
             check("import: undo button offered", op.locator("[data-act=undo-import]").count() == 1)
             bad = os.path.join(OUT, "bad.json"); open(bad, "w").write("{\"x\":1}")
             op.set_input_files("#import-file", bad)

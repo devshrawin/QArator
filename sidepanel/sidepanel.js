@@ -1,8 +1,9 @@
 // QArator side panel. One small state object, re-rendered per view; typing
 // updates state without re-rendering so focus and caret stay put.
 import { loadSettings, onSettingsChanged, PROVIDERS } from '../lib/settings.js';
-import { generate, parseJson, describeError, AIError } from '../lib/ai.js';
-import { buildPrompt, buildReport, buildTitle, descriptionText, descriptionHtml, rewritePrompt, rewriteResult, applyUrlRules, isText, stepsText, matchOption, looseKey } from '../lib/report.js';
+import { generateAuto, parseJson, describeError, AIError, AUTO, cooldowns } from '../lib/ai.js';
+import { nearLimit, usedToday, istClock } from '../lib/usage.js';
+import { buildPrompt, buildReport, buildTitle, descriptionText, descriptionHtml, rewritePrompt, rewriteResult, locate, isText, stepsText, matchOption, looseKey } from '../lib/report.js';
 import { detectEnv, fileToDataUrl, forAi, thumb } from '../lib/env.js';
 import { esc, icon, orb, beam, markSvg, applyTheme, watchTheme, toast, copyText, downloadDataUrl, fmtTime, uid } from '../lib/ui.js';
 import { openMarkup } from './markup.js';
@@ -55,7 +56,7 @@ async function saveHistory(status) {
 // ---------- helpers ----------
 const providerName = () => (PROVIDERS[S.ai.provider] || {}).label || 'your AI provider';
 const portalLabel = () => {
-  const p = st.report?.segments.portal || (st.page && applyUrlRules(st.page.url, S.urlRules).portal) || '';
+  const p = st.report?.segments.portal || (st.page && locate(st.page, S.urlRules).portal) || '';
   return [S.title.project, p].filter(Boolean).join(' · ');
 };
 const isZohoUrl = (url) => {
@@ -74,11 +75,34 @@ async function pageInfo(tab) {
   } catch (e) { /* content script not in this tab yet */ }
   try {
     const [r] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: () => ({ url: location.href, title: document.title, viewport: { w: innerWidth, h: innerHeight, dpr: devicePixelRatio || 1 } }) });
-    return { ...r.result, errors: null, errorsIncluded: false };
+    const [h] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['content/page-hints.js'] }).catch(() => [{}]);
+    return { ...r.result, hints: (h && h.result) || null, errors: null, errorsIncluded: false };
   } catch (e) {
     return { url: tab.url || '', title: tab.title || '', viewport: null, errors: null, errorsIncluded: false };
   }
 }
+// The page under test when there is no capture yet (a pasted image, or a bug without a screenshot).
+async function notePage() {
+  const { tab } = await activeTab().catch(() => ({}));
+  if (tab && /^(https?|file):/.test(tab.url || '')) st.page = { ...(await pageInfo(tab)), capturedAt: Date.now() };
+}
+async function quotaOpts() {
+  const { usage, learnedLimits = {} } = await chrome.storage.local.get(['usage', 'learnedLimits']);
+  return { limits: learnedLimits, used: (m) => usedToday(usage, m) };
+}
+// One line under the Write button when a model is near its daily limit or resting after one.
+let quotaNote = '';
+async function refreshQuota() {
+  const { usage, learnedLimits = {} } = await chrome.storage.local.get(['usage', 'learnedLimits']);
+  const resting = Object.entries(await cooldowns());
+  const parts = nearLimit(usage, learnedLimits).map((h) => `${h.model}: ${h.used} of ${h.limit} requests used today`);
+  if (resting.length) parts.push(`${resting.map(([m]) => m).join(', ')} resting until ${istClock(Math.min(...resting.map(([, u]) => u)))}`);
+  const next = parts.length ? `${parts.join(' · ')}.${S.ai.model === AUTO || S.ai.fallback !== false ? ' Other models are used meanwhile.' : ''}` : '';
+  if (next !== quotaNote) { quotaNote = next; if (st.view === 'capture') render(); }
+}
+const quotaHtml = () => (quotaNote ? `<div class="hint" role="status" style="text-align:center;color:var(--acc-text)">${esc(quotaNote)} <button type="button" class="btn b-ghost b-sm" data-action="usage" style="height:auto;padding:0 4px">Usage</button></div>` : '');
+const modelLabel = () => (S.ai.model === AUTO ? 'Auto model' : S.ai.model);
+
 const cap = () => ({ note: st.note, steps: st.steps, page: st.page, env, shotNames: st.shots.map((s) => s.name) });
 const stamp = (d = new Date()) => { const p = (n) => String(n).padStart(2, '0'); return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`; };
 // One name per screenshot, used in the report text, the Zoho attachment and Save screenshots.
@@ -109,10 +133,7 @@ async function captureTab() {
 async function addFiles(files) {
   const imgs = [...files].filter((f) => f.type.startsWith('image/'));
   if (!imgs.length) { toast('That file is not an image.'); return; }
-  if (!st.page) {
-    const { tab } = await activeTab();
-    if (tab && /^(https?|file):/.test(tab.url || '')) st.page = { ...(await pageInfo(tab)), capturedAt: Date.now() };
-  }
+  if (!st.page) await notePage();
   for (const f of imgs) await addShot(await fileToDataUrl(f));
 }
 
@@ -125,16 +146,18 @@ async function write() {
   ctrl = new AbortController();
   try {
     if (!S.ai.apiKey && S.ai.provider !== 'compatible') throw new AIError('nokey', 'no key');
+    if (!st.page) await notePage();
     const images = [];
     for (const s of st.shots) images.push(await forAi(s.dataUrl));
     setPhase(1);
     const { system, text, rule } = buildPrompt(S, cap());
-    const p = generate(S.ai, { system, text, images, json: true, maxTokens: 4096 }, ctrl.signal);
+    const p = generateAuto(S.ai, { system, text, images, json: true, maxTokens: 4096, kind: 'write' }, ctrl.signal, await quotaOpts());
     setTimeout(() => st.view === 'writing' && st.writing.phase === 1 && setPhase(2), 700);
-    const out = await p;
+    const { text: out, model } = await p;
     setPhase(3);
     const ans = parseJson(out);
     st.report = buildReport(S, cap(), ans, rule);
+    st.report.model = model;
     st.view = 'review'; st.writing = null; st.zoho = null;
     saveDraft(); render(); $('#main').scrollTop = 0;
   } catch (e) {
@@ -157,7 +180,7 @@ async function rewrite(id) {
     const images = [];
     for (const s of st.shots) images.push(await forAi(s.dataUrl));
     const { system, text } = rewritePrompt(S, cap(), st.report, id);
-    const out = await generate(S.ai, { system, text, images, json: true, maxTokens: 1500 });
+    const { text: out } = await generateAuto(S.ai, { system, text, images, json: true, maxTokens: 1500, kind: 'rewrite' }, undefined, await quotaOpts());
     const sec = st.report.sections.find((s) => s.id === id);
     const t = rewriteResult(parseJson(out), sec.layout);
     if (t) sec.text = t;
@@ -168,7 +191,7 @@ async function rewrite(id) {
   st.busy = null; render();
 }
 function blankReport() {
-  const rule = st.page ? applyUrlRules(st.page.url, S.urlRules) : {};
+  const rule = st.page ? locate(st.page, S.urlRules) : {};
   st.report = buildReport(S, cap(), { sections: {} }, { portal: rule.portal || '', module: rule.module || '', page: rule.page || '' });
   st.report.aiChosen = {};
   st.error = null; st.view = 'review'; saveDraft(); render();
@@ -252,7 +275,13 @@ async function renderEmpty() {
   const recent = (await history()).slice(0, 3);
   if (st.view !== 'capture' || st.shots.length || st.noShot) return; // state changed while loading
   const { tab } = await activeTab().catch(() => ({}));
+  const { onboarded } = await chrome.storage.local.get('onboarded');
+  if (st.view !== 'capture' || st.shots.length || st.noShot) return;
+  const setup = !onboarded && !S.ai.apiKey && S.ai.provider !== 'compatible';
   main.innerHTML = `
+  ${setup ? `<div class="alert" role="region" aria-label="Set up QArator"><span class="alert-icon">${icon.key}</span>
+    <div style="flex:1;min-width:0"><h2>Set up QArator · about 2 minutes</h2><p>Add your AI key, project code and Zoho address. QArator tests the key for you.</p>
+    <button type="button" class="btn b-pri b-sm" data-action="setup" style="margin-top:10px">Start setup</button></div></div>` : ''}
   <div><h1 class="h1">Capture what's wrong</h1>
   <p class="hint" style="margin:4px 0 0">QArator saves the visible part of the tab with its URL, browser details and page errors.</p></div>
   <div class="stack">
@@ -324,6 +353,12 @@ function errorsBlock() {
   return `<div class="chips">${env.browser ? `<span class="chip">${esc(env.browser)}</span>` : ''}${env.os ? `<span class="chip">${esc(env.os)}</span>` : ''}${vp}${chip}</div>${list}`;
 }
 
+function whereHtml() {
+  const w = locate(st.page, S.urlRules);
+  const parts = ['portal', 'module', 'page'].map((k) => w[k]).filter(Boolean);
+  return parts.length ? `<div class="hint" id="where" style="margin-top:4px">Location: <span style="color:var(--ink)">${parts.map(esc).join(' › ')}</span> · read from the page, editable in review</div>` : '';
+}
+
 function renderCaptured() {
   const n = st.shots.length;
   main.innerHTML = `
@@ -346,6 +381,7 @@ function renderCaptured() {
     <div class="lbl">Page</div>
     <div class="mono url">${esc(st.page.url)}</div>
     <div class="hint" style="margin-top:2px">${st.page.capturedAt ? 'Captured ' + fmtTime(st.page.capturedAt) + ' · ' : ''}${esc(st.page.title || '')}</div>
+    ${whereHtml()}
     ${errorsBlock()}
   </div>` : ''}
   <div>
@@ -363,7 +399,8 @@ function renderCaptured() {
   <div><button type="button" class="btn b-ghost b-sm" data-action="reset" style="margin-left:-8px">Start over</button></div>`;
   dock.innerHTML = `
   <button type="button" class="btn b-pri wide" data-action="write" style="height:40px">Write bug report <span class="kbd" style="margin-left:4px">Ctrl+Enter</span></button>
-  <div class="hint" style="text-align:center">Sends ${n ? `${n} screenshot${n === 1 ? '' : 's'}, ` : ''}your note${st.page?.errorsIncluded ? ' and page errors' : ''} to ${esc(providerName())}.</div>`;
+  <div class="hint" style="text-align:center">Sends ${n ? `${n} screenshot${n === 1 ? '' : 's'}, ` : ''}your note${st.page?.errorsIncluded ? ', page errors' : ''}${st.page ? ' and the page address' : ''} to ${esc(providerName())} · ${esc(modelLabel())}.</div>
+  ${quotaHtml()}`;
   after();
   startRetryTimer();
 }
@@ -383,7 +420,7 @@ function renderWriting() {
   const n = st.shots.length;
   const steps = [
     `Prepare ${n ? `${n} screenshot${n === 1 ? '' : 's'}` : 'your note'}`,
-    `Send to ${providerName()}${S.ai.model ? ' · ' + S.ai.model : ''}`,
+    `Send to ${providerName()} · ${modelLabel()}`,
     n ? 'Read the screenshots and write sections in your house format' : 'Write sections in your house format',
     'Choose title, fields and tags'
   ];
@@ -448,7 +485,7 @@ function renderReview() {
   main.innerHTML = `
   <div style="display:flex;align-items:center;justify-content:space-between;margin:-8px -8px -8px -8px">
     <button type="button" class="btn b-ghost b-sm" data-action="back-capture">${icon.back}Back to capture</button>
-    <span class="hint" style="margin-right:8px">Draft · not submitted</span></div>
+    <span class="hint" style="margin-right:8px">${r.model ? `Written by ${esc(r.model)} · ` : ''}Draft · not submitted</span></div>
   <section aria-labelledby="h-title">
     <div class="row-between"><h2 class="h2" id="h-title">Title</h2><span class="hint" id="title-count">${countHtml()}</span></div>
     <div class="grid2" style="margin-top:10px">${segInputs}</div>
@@ -546,6 +583,8 @@ document.addEventListener('click', async (e) => {
     case 'capture': return captureTab();
     case 'file': return $('#file').click();
     case 'settings': return chrome.runtime.openOptionsPage();
+    case 'usage': return chrome.tabs.create({ url: chrome.runtime.getURL('options/options.html#usage') });
+    case 'setup': return chrome.tabs.create({ url: chrome.runtime.getURL('options/welcome.html') });
     case 'noshot': st.noShot = true; render(); return $('#note')?.focus();
     case 'toggle-errors': st.page.errorsIncluded = !st.page.errorsIncluded; saveDraft(); return render();
     case 'toggle-steps': st.stepsOpen = !st.stepsOpen; render(); if (st.stepsOpen) $('#steps')?.focus(); return;
@@ -653,6 +692,12 @@ chrome.runtime.onMessage.addListener((msg) => {
   await loadDraft();
   watchTheme();
   render();
+  refreshQuota();
+  chrome.storage.onChanged.addListener((c, area) => {
+    if (area !== 'local') return;
+    if (c.usage || c.modelCooldown || c.learnedLimits) refreshQuota();
+    if (c.onboarded && st.view === 'capture') render();
+  });
   try {
     const { pendingCapture } = await chrome.storage.session.get('pendingCapture');
     if (pendingCapture && Date.now() - pendingCapture < 5000) { await chrome.storage.session.remove('pendingCapture'); captureTab(); }

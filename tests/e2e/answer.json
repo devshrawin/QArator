@@ -1,8 +1,8 @@
 {
   "summary_title": "dark mode leaves the dashboard canvas white.",
   "portal": "Department Portal",
-  "module": "SEVI Dashboard",
-  "page": "State Overview",
+  "module": "Wrong Module",
+  "page": "Wrong Page",
   "sections": {
     "url_note": "URL: http://localhost:8765/test.html (Specifically affects the State Overview workspace)",
     "summary": "After turning on dark mode, the sidebar turns dark but the State Overview canvas stays white.",

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "QArator",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Capture a bug, describe it in one line, and fill the Zoho Submit Issue form in your team's format.",
   "minimum_chrome_version": "116",
   "icons": {
@@ -39,7 +39,7 @@
     },
     {
       "matches": ["http://*/*", "https://*/*"],
-      "js": ["content/errors-bridge.js"],
+      "js": ["content/page-hints.js", "content/errors-bridge.js"],
       "run_at": "document_start"
     }
   ],

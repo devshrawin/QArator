@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Set up QArator</title>
+<link rel="stylesheet" href="../lib/tokens.css">
+<link rel="stylesheet" href="../lib/border-beam.css">
+<link rel="stylesheet" href="options.css">
+<style>
+  .wz { max-width: 620px; margin: 0 auto; padding: 40px 16px 64px; display: flex; flex-direction: column; gap: 22px; }
+  .dots { display: flex; gap: 6px; align-items: center; }
+  .dots i { width: 28px; height: 4px; border-radius: 2px; background: var(--chip); }
+  .dots i.on { background: var(--acc); }
+  .card { border: 1px solid var(--line); border-radius: 10px; padding: 22px; display: flex; flex-direction: column; gap: 16px; background: var(--bg); }
+  .card h1 { font-size: 22px; font-weight: 600; margin: 0; }
+  .card p { margin: 0; color: var(--ink2); line-height: 1.5; }
+  .card ul { margin: 0; padding-left: 18px; color: var(--ink2); line-height: 1.7; }
+  .foot { display: flex; gap: 8px; align-items: center; }
+  .foot .grow { flex: 1; }
+  .kbd { font: 12px var(--mono); border: 1px solid var(--fline); border-radius: 4px; padding: 0 5px; }
+  .ok { color: var(--ink); } .bad { color: var(--acc-text); }
+  @media (max-width: 560px) { .g2 { grid-template-columns: minmax(0, 1fr); } }
+</style>
+<script src="../lib/thinking-orbs.js"></script>
+<script type="module" src="welcome.js"></script>
+</head>
+<body>
+<header class="top">
+  <div class="wrap top-in">
+    <span id="mark"></span>
+    <span class="brand">QArator</span>
+    <span style="color:var(--ink3)">/</span>
+    <span class="brand" style="font-weight:400">Setup</span>
+  </div>
+</header>
+<main class="wz">
+  <div class="dots" id="dots" aria-hidden="true"></div>
+  <div id="step"></div>
+</main>
+<input type="file" id="import-file" accept="application/json,.json" hidden>
+</body>
+</html>

@@ -39,3 +39,10 @@ main { flex: 999 1 560px; min-width: 0; max-width: 820px; padding-bottom: 120px;
 .example .t { font-weight: 600; font-size: 14px; word-break: break-word; }
 .status { display: inline-flex; align-items: center; gap: 6px; }
 .status.bad { color: var(--acc-text); }
+
+/* usage */
+.tbl .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.meter { height: 6px; border-radius: 3px; background: var(--chip); overflow: hidden; margin-bottom: 4px; }
+.meter i { display: block; height: 100%; background: var(--ink2); }
+.meter i.q { background: var(--acc); }
+.meter i.s { background: var(--acc-text); }

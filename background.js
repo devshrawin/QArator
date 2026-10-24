@@ -3,7 +3,12 @@
 function enablePanelOnClick() {
   chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {});
 }
-chrome.runtime.onInstalled.addListener(enablePanelOnClick);
+chrome.runtime.onInstalled.addListener(async (d) => {
+  enablePanelOnClick();
+  if (d.reason !== 'install') return;
+  const { onboarded } = await chrome.storage.local.get('onboarded');
+  if (!onboarded) chrome.tabs.create({ url: chrome.runtime.getURL('options/welcome.html') });
+});
 chrome.runtime.onStartup.addListener(enablePanelOnClick);
 enablePanelOnClick();
 
