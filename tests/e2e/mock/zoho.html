@@ -1,0 +1,71 @@
+<!doctype html><html><head><title>Submit Issue - Zoho Projects (mock)</title>
+<style>
+body{font-family:sans-serif;padding:20px} ruc-field{display:block;margin:10px 0;padding:6px;border:1px solid #eee}
+ruc-label,ruc-input,ruc-select,ruc-editor,ruc-textarea,ruc-fileupload{display:block}
+.zselectbox{border:1px solid #999;padding:4px;width:240px;cursor:pointer}.ztokenfield{border:1px solid #999;padding:4px;width:300px}
+.zdropdownlist{position:absolute;background:#fff;border:1px solid #333;list-style:none;padding:0;margin:0;z-index:9}.zdropdownlist li{padding:3px 8px}
+.zdropdownlist[hidden]{display:none} .ztokenfield__token{background:#def;margin-right:4px;padding:1px 4px}
+iframe{width:600px;height:200px;border:1px solid #999} .tagchip{background:#fed;margin-right:4px;padding:1px 4px}
+</style></head><body>
+<h2>Submit Issue</h2>
+<form id="f" onsubmit="return false">
+<ruc-field><ruc-label><label>Issue Title *</label></ruc-label><ruc-input rc-label="Issue Title"><input type="text" id="title"></ruc-input></ruc-field>
+<ruc-field><ruc-label><label>Description</label></ruc-label><ruc-editor rc-label="Description"><iframe id="ed" srcdoc="<html><body contenteditable='true' style='min-height:150px'></body></html>"></iframe></ruc-editor></ruc-field>
+<div id="selects"></div>
+<ruc-field><ruc-label><label>Steps to Reproduce</label></ruc-label><ruc-textarea rc-label="Steps to Reproduce"><textarea id="steps" maxlength="1000"></textarea></ruc-textarea></ruc-field>
+<div id="addBugTag"><span>Tags</span> <span class="associatedTags"></span><input class="inputcatsearch" placeholder="Add tag"></div>
+<ul id="tag_suggestion_list" class="zdropdownlist" hidden></ul>
+<ruc-field><ruc-label><label>Attachments</label></ruc-label><ruc-fileupload><input type="file" id="files" multiple style="display:none"></ruc-fileupload><div id="flist"></div></ruc-field>
+<button type="submit" id="submit">Submit</button>
+</form>
+<script>
+const SELECTS = [
+  ['Severity', ['None', 'Show stopper', 'Critical', 'Major', 'Minor']],
+  ['Priority', ['None', 'Low', 'Medium', 'High']],
+  ['Classification', ['Issue', 'Bug', 'Enhancement', 'Suggestion']],
+  ['Test Phase', ['Smoke', 'Sanity', 'Functional', 'Regression', 'UAT']],
+  ['Reproducible', ['None', 'Always', 'Sometimes', 'Rarely', 'Unable']],
+  ['Flag', ['Internal', 'External']],
+  ['Assignee', ['Unassigned', 'Asha', 'Ravi']]
+];
+const host = document.getElementById('selects');
+let n = 0;
+function list(id, opts, onPick) {
+  const ul = document.createElement('ul'); ul.id = id; ul.className = 'zdropdownlist'; ul.hidden = true;
+  opts.forEach((o) => { const li = document.createElement('li'); li.textContent = o; li.addEventListener('click', () => { onPick(o); ul.hidden = true; }); ul.appendChild(li); });
+  document.body.appendChild(ul); return ul;
+}
+for (const [label, opts] of SELECTS) {
+  const id = 'list-' + (n++);
+  const f = document.createElement('ruc-field');
+  f.innerHTML = `<ruc-label><label>${label}</label></ruc-label><ruc-select rc-label="${label}"><div class="zselectbox" tabindex="0" aria-haspopup="listbox" aria-owns="${id}"><span class="zselectbox__selected">${opts[0]}</span></div><select hidden><option>${opts[0]}</option></select></ruc-select>`;
+  host.appendChild(f);
+  const box = f.querySelector('.zselectbox');
+  const ul = list(id, opts, (o) => { box.querySelector('.zselectbox__selected').textContent = o; window.__picked = window.__picked || {}; window.__picked[label] = o; });
+  box.addEventListener('click', () => { const r = box.getBoundingClientRect(); ul.style.left = r.left + 'px'; ul.style.top = (r.bottom + scrollY) + 'px'; ul.hidden = false; });
+}
+// Device Type token field
+{
+  const f = document.createElement('ruc-field');
+  f.innerHTML = `<ruc-label><label>Device Type</label></ruc-label><ruc-select rc-label="Device Type"><div class="ztokenfield"><span class="tokens"></span><input class="ztokenfield__textbox" aria-owns="list-dev"></div></ruc-select>`;
+  host.appendChild(f);
+  const input = f.querySelector('input'), toks = f.querySelector('.tokens');
+  const ul = list('list-dev', ['Desktop', 'Mobile', 'Tablet'], (o) => { const s = document.createElement('span'); s.className = 'ztokenfield__token'; s.textContent = o; toks.appendChild(s); input.value = ''; });
+  input.addEventListener('click', () => { const r = input.getBoundingClientRect(); ul.style.left = r.left + 'px'; ul.style.top = (r.bottom + scrollY) + 'px'; ul.hidden = false; });
+}
+// tags: suggestions only for existing tags
+const EXISTING = ['UR - Department Portal', 'UR - Department Portal - SEVI Dashboard', 'UR - Citizen Portal'];
+const tin = document.querySelector('.inputcatsearch'), sug = document.getElementById('tag_suggestion_list'), chips = document.querySelector('.associatedTags');
+tin.addEventListener('keyup', () => {
+  const q = tin.value.toLowerCase(); sug.innerHTML = '';
+  EXISTING.filter((t) => q && t.toLowerCase().includes(q)).forEach((t) => {
+    const li = document.createElement('li'); const sp = document.createElement('span'); sp.textContent = t; li.appendChild(sp);
+    li.addEventListener('click', () => { const c = document.createElement('span'); c.className = 'tagchip'; c.textContent = t; chips.appendChild(c); tin.value = ''; sug.hidden = true; });
+    sug.appendChild(li);
+  });
+  const r = tin.getBoundingClientRect(); sug.style.left = r.left + 'px'; sug.style.top = (r.bottom + scrollY) + 'px'; sug.hidden = !sug.children.length;
+});
+document.getElementById('files').addEventListener('change', (e) => { document.getElementById('flist').textContent = [...e.target.files].map((f) => f.name + ' (' + f.size + ' bytes)').join(', '); });
+document.getElementById('submit').addEventListener('click', () => { window.__submitted = true; });
+</script>
+</body></html>

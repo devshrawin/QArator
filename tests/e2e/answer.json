@@ -1,0 +1,16 @@
+{
+  "summary_title": "dark mode leaves the dashboard canvas white.",
+  "portal": "Department Portal",
+  "module": "SEVI Dashboard",
+  "page": "State Overview",
+  "sections": {
+    "url_note": "URL: http://localhost:8765/test.html (Specifically affects the State Overview workspace)",
+    "summary": "After turning on dark mode, the sidebar turns dark but the State Overview canvas stays white.",
+    "issue_details": "The screenshot qarator_x.png shows the problem.\n\nSidebar: The left navigation is dark navy.\n\nCanvas: The metric cards stay white (#ffffff).",
+    "steps": ["1. Open the Department Portal and log in", "2. Click the theme toggle", "Step 3: Open SEVI Dashboard > State Overview", "- Observe the cards"],
+    "expected": "All dashboard components switch to the dark palette.",
+    "actual": "The canvas and cards remain in light mode."
+  },
+  "fields": { "severity": "minor", "priority": "Medium", "classification": "Bug" },
+  "tags": ["ur - department portal", "made-up tag", "UR - Department Portal"]
+}
