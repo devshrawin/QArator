@@ -130,6 +130,10 @@ try:
               await chrome.storage.local.set({ settings: s });
             }""", patch)
 
+        # the team's format (what a tester imports once): the defaults themselves are neutral
+        team = json.load(open(os.path.join(HERE, "team-format.json"), encoding="utf-8"))
+        set_settings({k: team[k] for k in ("title", "urlRules", "sections", "fields", "tags", "styleExample")})
+
         # ---- site under test in window W1
         def welcome_opened():
             urls = sw.evaluate("""async () => { for (let i = 0; i < 40; i++) { const t = await chrome.tabs.query({}); if (t.some((x) => /welcome[.]html/.test(x.url || x.pendingUrl || ''))) return t.map((x) => x.url || x.pendingUrl); await new Promise((r) => setTimeout(r, 200)); } return (await chrome.tabs.query({})).map((x) => x.url); }""")

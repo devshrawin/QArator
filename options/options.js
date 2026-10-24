@@ -141,7 +141,7 @@ function secLength() {
 }
 
 function exampleTitle() {
-  return buildTitle({ segments: { project: S.title.project, portal: 'Department Portal', module: 'SEVI Dashboard', page: 'State Overview', summary: S.title.summaryCase === 'title' ? 'Incomplete Theme Propagation for Dark Mode on Dashboard Canvas' : 'Incomplete theme propagation for dark mode on dashboard canvas' } }, S);
+  return buildTitle({ segments: { project: S.title.project, portal: 'Admin Portal', module: 'Orders', page: 'Order List', summary: S.title.summaryCase === 'title' ? 'Export Button Does Nothing When Filters Are Applied' : 'Export button does nothing when filters are applied' } }, S);
 }
 
 function secTitle() {

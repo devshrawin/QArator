@@ -7,3 +7,4 @@ tests/e2e/requests.jsonl
 __pycache__/
 release/
 tests/e2e/out-audit/
+brag-output*/
