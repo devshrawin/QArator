@@ -2,7 +2,7 @@
 // updates state without re-rendering so focus and caret stay put.
 import { loadSettings, onSettingsChanged, PROVIDERS } from '../lib/settings.js';
 import { generate, parseJson, describeError, AIError } from '../lib/ai.js';
-import { buildPrompt, buildReport, buildTitle, descriptionText, descriptionHtml, rewritePrompt, rewriteResult, applyUrlRules, isText, stepsText } from '../lib/report.js';
+import { buildPrompt, buildReport, buildTitle, descriptionText, descriptionHtml, rewritePrompt, rewriteResult, applyUrlRules, isText, stepsText, matchOption, looseKey } from '../lib/report.js';
 import { detectEnv, fileToDataUrl, forAi, thumb } from '../lib/env.js';
 import { esc, icon, orb, beam, markSvg, applyTheme, watchTheme, toast, copyText, downloadDataUrl, fmtTime, uid } from '../lib/ui.js';
 import { openMarkup } from './markup.js';
@@ -604,8 +604,10 @@ document.addEventListener('keydown', (e) => {
   if ($('#overlay').firstChild) return; // markup editor handles its own keys
   if (e.target.id === 'new-tag' && e.key === 'Enter') {
     e.preventDefault();
-    const v = e.target.value.trim().toLowerCase();
-    if (v && !st.report.tags.some((t) => t.name === v)) { st.report.tags.push({ name: v, on: true }); saveDraft(); render(); $('#new-tag')?.focus(); }
+    // a tag from the team list keeps its exact spelling; anything else is lowercased like AI tags
+    const raw = e.target.value.trim();
+    const v = matchOption(raw, S.tags.list) || raw.toLowerCase();
+    if (v && !st.report.tags.some((t) => looseKey(t.name) === looseKey(v))) { st.report.tags.push({ name: v, on: true }); saveDraft(); render(); $('#new-tag')?.focus(); }
     return;
   }
   if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
