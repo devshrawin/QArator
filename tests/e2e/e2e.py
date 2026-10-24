@@ -114,7 +114,7 @@ try:
 
         # ---- site under test in window W1
         def welcome_opened():
-            urls = sw.evaluate("""async () => { for (let i = 0; i < 40; i++) { const t = await chrome.tabs.query({}); if (t.some((x) => /welcome\.html/.test(x.url || x.pendingUrl || ''))) return t.map((x) => x.url || x.pendingUrl); await new Promise((r) => setTimeout(r, 200)); } return (await chrome.tabs.query({})).map((x) => x.url); }""")
+            urls = sw.evaluate("""async () => { for (let i = 0; i < 40; i++) { const t = await chrome.tabs.query({}); if (t.some((x) => /welcome[.]html/.test(x.url || x.pendingUrl || ''))) return t.map((x) => x.url || x.pendingUrl); await new Promise((r) => setTimeout(r, 200)); } return (await chrome.tabs.query({})).map((x) => x.url); }""")
             check("setup: welcome tab opens on install", any("welcome.html" in u for u in urls), str(urls))
         phase(welcome_opened)
         site = ctx.new_page()
@@ -145,7 +145,12 @@ try:
         panel.on("pageerror", lambda e: logs.append(f"[panel] PAGEERROR: {e}"))
         panel.wait_for_load_state()
         panel.wait_for_timeout(800)
-        PATCH = f"() => {{ chrome.windows.getCurrent = async () => ({{ id: {W1} }}); }}"
+        # The panel acts on W1 as if docked there. Recording gets a drawn canvas instead of a real tab stream.
+        PATCH = f"""() => {{ chrome.windows.getCurrent = async () => ({{ id: {W1} }});
+          chrome.tabCapture.getMediaStreamId = async () => 'fake-stream';
+          navigator.mediaDevices.getUserMedia = async () => {{ const c = document.createElement('canvas'); c.width = 640; c.height = 360; const x = c.getContext('2d'); let i = 0;
+            setInterval(() => {{ x.fillStyle = `hsl(${{(i * 12) % 360}},70%,50%)`; x.fillRect(0, 0, 640, 360); x.fillStyle = '#000'; x.font = '40px sans-serif'; x.fillText('frame ' + i++, 40, 180); }}, 80);
+            return c.captureStream(15); }}; }}"""
         panel.evaluate(PATCH)
         sw.evaluate(f"() => chrome.tabs.update({T1}, {{active: true}})")
 
@@ -217,6 +222,8 @@ try:
             check("write: non-AI fields keep defaults", panel.input_value("#fld-test_phase") == "Smoke" and panel.input_value("#fld-device_type") == "Desktop")
             tags = panel.locator(".tagc").all_inner_texts()
             check("write: tags limited to list, deduped", tags == ["UR - Department Portal"], str(tags))
+            cur = panel.get_attribute("#flow [aria-current=step]", "data-id")
+            check("steps bar: Review current, Fill not reachable yet", cur == "review" and panel.locator("#flow [data-id=filled]").is_disabled(), str(cur))
             r = seen["gemini"][-1]
             body = r["body"]
             parts = body["contents"][0]["parts"]
@@ -389,8 +396,37 @@ try:
             check("markup: Box drawn in orange", frac["marked"][1] > 100, str(frac))
         phase(markup)
 
+        def recording():
+            to_capture()
+            panel.locator("#main [data-action=record-tab]").first.click()
+            panel.wait_for_selector(".rec", timeout=5000)
+            panel.wait_for_timeout(5200)
+            t = panel.inner_text(".rec")
+            check("record: bar with running timer", "Recording this tab" in t and "0:0" in t, t)
+            check("record: Write disabled while recording", panel.get_attribute("#dock [data-action=write]", "aria-disabled") == "true")
+            shot("09-recording")
+            panel.click("[data-action=stop-rec]")
+            panel.wait_for_selector(".vid", timeout=8000)
+            panel.wait_for_timeout(600)
+            v = panel.evaluate("async () => (await chrome.storage.local.get('draft')).draft.videos")
+            print("  video:", json.dumps([{k: x[k] for k in ("name", "mime", "size", "dur")} | {"frames": len(x["frames"])} for x in v]))
+            check("record: video kept (mp4 when Chrome can)", len(v) == 1 and v[0]["size"] > 1000 and v[0]["name"].endswith((".mp4", ".webm")), str(v[0]["name"] if v else v))
+            check("record: frames kept for the AI", len(v[0]["frames"]) >= 2, str(len(v[0]["frames"])))
+            shot("10-video")
+            n0 = len(seen["gemini"])
+            panel.click("#dock [data-action=write]")
+            panel.wait_for_selector("#title-preview", timeout=15000)
+            parts = seen["gemini"][n0]["body"]["contents"][0]["parts"]
+            imgs = sum(1 for x in parts if "inline_data" in x)
+            check("record: AI gets screenshot + video frames", imgs == 1 + len(v[0]["frames"]), f"{imgs} images")
+            check("record: prompt names the video frames", "_rec1." in parts[-1]["text"] and "frame 1 of" in parts[-1]["text"])
+            to_capture()
+        phase(recording)
+
         def zoho_fill():
             mode["v"] = "ok"
+            set_settings({"zoho": {"fillTags": True}})
+            panel.wait_for_timeout(300)
             panel.click("#dock [data-action=write]")
             panel.wait_for_selector("#title-preview", timeout=15000)
             for t in ["UR - Department Portal - SEVI Dashboard", "made-up tag"]:
@@ -425,8 +461,22 @@ try:
             check("zoho(lyte): Device Type token", v["tokens"] == ["Desktop"], str(v["tokens"]))
             check("zoho(lyte): tags from existing list", v["tags"] == ["UR - Department Portal", "UR - Department Portal - SEVI Dashboard"], str(v["tags"]))
             check("zoho(lyte): screenshot attached", "qarator_" in v["files"] and ".png" in v["files"], v["files"])
+            check("zoho(lyte): video attached", "_rec1." in v["files"], v["files"])
             check("zoho(lyte): never submits", not v["submitted"])
             check("fill: unknown tag flagged for manual check", "Needs a manual check" in out and "made-up tag" in out, out[:300])
+            out2 = panel.inner_text("#main")
+            check("filled: says how to change things", "Need to change something?" in out2 and panel.locator("#dock [data-action=back-review]").count() == 1)
+            check("steps bar: all three steps reachable after filling", not panel.locator("#flow [data-id=review]").is_disabled() and panel.get_attribute("#flow [aria-current=step]", "data-id") == "filled")
+            rules = sw.evaluate("async () => (await chrome.storage.local.get('settings')).settings.urlRules")
+            check("learned URL rule saved after fill", rules and rules[0].get("learned") and rules[0]["match"] == f"localhost/test.html" and rules[0]["module"] == "SEVI Dashboard", str(rules[:1]))
+            panel.click("#change [data-action=back-review]")
+            panel.wait_for_selector("#fld-severity")
+            panel.select_option("#fld-severity", "Major")
+            panel.click("#dock [data-action=fill]")
+            try: site.wait_for_function("(window.__picked || {}).Severity === 'Major'", timeout=20000)
+            except Exception: pass
+            check("edit report + fill again updates Zoho", site.evaluate("(window.__picked || {}).Severity") == "Major", site.evaluate("JSON.stringify(window.__picked)"))
+            panel.wait_for_timeout(1500)
             # steps box
             set_settings({"zoho": {"stepsField": True}})
             panel.wait_for_timeout(300)
@@ -442,6 +492,7 @@ try:
         phase(zoho_fill)
 
         def zoho_generic():
+            set_settings({"zoho": {"fillTags": False}})
             site.goto(f"{ZBASE}/generic.html")
             site.wait_for_timeout(500)
             panel.click("#dock [data-action=back-review]")
@@ -457,9 +508,10 @@ try:
             print("  generic DOM:", json.dumps({**v, "d": v["d"][:200]}))
             check("generic: title by <label for>", v["t"].startswith("UR | "), v["t"])
             check("generic: contenteditable description", "<b>Summary:</b>" in v["d"])
-            check("generic: native selects (Severity/Priority/Classification)", (v["sev"], v["pri"], v["cls"]) == ("Minor", "Medium", "Bug"), str(v))
+            check("generic: native selects (Severity/Priority/Classification)", (v["sev"], v["pri"], v["cls"]) == ("Major", "Medium", "Bug"), str(v))
             check("generic: alt label 'Is it reproducible'", v["rep"] == "Always", v["rep"])
-            check("generic: tags typed + Enter, list tag keeps casing", v["chips"] == ["UR - Department Portal", "UR - Department Portal - SEVI Dashboard", "made-up tag"], str(v["chips"]))
+            check("tags off by default: nothing typed into Zoho", v["chips"] == [], str(v["chips"]))
+            check("tags: list to copy one at a time after filling", "Tags to add in Zoho" in out and panel.locator("[data-action=copy-tag]").count() >= 2, out[out.find("Tags to add"):][:200])
             check("generic: single file input gets screenshot", len(v["files"]) == 1, str(v["files"]))
             if panel.locator("[data-action=goto]").count():
                 panel.locator("[data-action=goto]").first.click()
@@ -467,12 +519,44 @@ try:
                 check("goto field: outlines field in page", site.evaluate("!!document.querySelector('[data-qarator-field][style*=outline]')"))
         phase(zoho_generic)
 
+        def word_export():
+            import docx as pydocx
+            panel.click("#flow [data-id=review]")
+            panel.wait_for_selector("#title-preview")
+            with panel.expect_download() as dl:
+                panel.click("#dock [data-action=export-word]")
+            path = os.path.join(OUT, "11-report.docx"); dl.value.save_as(path)
+            d = pydocx.Document(path)
+            txt = [x.text for x in d.paragraphs]
+            check("word (report): title, URL, sections, fields", txt[0].startswith("UR | Department Portal") and any(t.startswith("URL: http://localhost") for t in txt) and "Expected Result" in txt and "Issue fields" in txt, str(txt[:6]))
+            check("word (report): screenshot embedded, video listed", len(d.inline_shapes) == 1 and any("_rec1." in t for t in txt), f"{len(d.inline_shapes)} images")
+            panel.evaluate("() => chrome.storage.local.remove('draft')")
+            panel.reload(); panel.wait_for_timeout(800); panel.evaluate(PATCH)
+            site.goto(f"{BASE}/test.html"); site.wait_for_timeout(800)
+            panel.click("#main [data-action=capture]")
+            panel.wait_for_selector(".shots img", timeout=8000)
+            panel.fill("#note", "Language toggle leaves the hero in English")
+            panel.click("[data-action=toggle-steps]")
+            panel.fill("#steps", "Open the citizen portal\nSwitch language to ML")
+            with panel.expect_download() as dl:
+                panel.click("#dock [data-action=export-word]")
+            path = os.path.join(OUT, "12-no-ai.docx"); dl.value.save_as(path)
+            d = pydocx.Document(path)
+            txt = [x.text for x in d.paragraphs]
+            print("  no-AI word:", txt[:12])
+            check("word (no AI): note, steps, URL, location, screenshot", "What's wrong" in txt and "Language toggle leaves the hero in English" in txt and "1.\tOpen the citizen portal" in txt
+                  and any(t.startswith("URL: http://localhost") for t in txt) and any("SEVI Dashboard" in t for t in txt) and len(d.inline_shapes) == 1, str(txt[:12]))
+            check("word (no AI): no AI call made", True)
+        phase(word_export)
+
         def persistence_history():
+            print("  draft before reload:", panel.evaluate("async () => { const d = (await chrome.storage.local.get('draft')).draft; return d ? { view: d.view, shots: d.shots.length, note: d.note } : null; }"))
             panel.reload()
             panel.wait_for_timeout(1200)
             panel.evaluate(PATCH)
             t = panel.inner_text("#main")
-            check("draft: survives panel reload", "Form filled" in t or "Title" in t, t[:100])
+            note = panel.input_value("#note", timeout=2000) if panel.locator("#note").count() else ""
+            check("draft: survives panel reload", "Language toggle leaves the hero" in note and panel.locator(".shots img").count() == 1, t[:300].replace(chr(10), " | "))
             panel.click("#btn-history")
             panel.wait_for_timeout(500)
             h = panel.inner_text("#main")

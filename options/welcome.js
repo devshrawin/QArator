@@ -76,6 +76,8 @@ function tryIt() {
     <ul>
       <li>Pin QArator: puzzle-piece menu in the toolbar › pin.</li>
       <li><span class="kbd">Alt+Shift+Q</span> opens the panel, <span class="kbd">Alt+Shift+S</span> captures the tab you're on.</li>
+      <li><span class="kbd">Alt+Shift+R</span> starts and stops a recording of the tab; <strong>Record screen</strong> in the panel records a screen or window with the mouse pointer.</li>
+      <li>No AI needed? <strong>Export to Word</strong> saves the URL, screenshots, note and steps in a Word file.</li>
       <li>Type what's wrong and press <span class="kbd">Ctrl+Enter</span> to write the report.</li>
       <li>Open Zoho's Submit Issue form, then <span class="kbd">Ctrl+Enter</span> again to fill it.</li>
       <li>Tabs that were open before you installed QArator need one reload to collect page errors.</li>

@@ -3,10 +3,14 @@
 import { loadSettings, onSettingsChanged, PROVIDERS } from '../lib/settings.js';
 import { generateAuto, parseJson, describeError, AIError, AUTO, cooldowns } from '../lib/ai.js';
 import { nearLimit, usedToday, istClock } from '../lib/usage.js';
-import { buildPrompt, buildReport, buildTitle, descriptionText, descriptionHtml, rewritePrompt, rewriteResult, locate, isText, stepsText, matchOption, looseKey } from '../lib/report.js';
+import { buildPrompt, buildReport, buildTitle, descriptionText, descriptionHtml, rewritePrompt, rewriteResult, locate, isText, stepsText, matchOption, looseKey, learnRule, suggestTags } from '../lib/report.js';
 import { detectEnv, fileToDataUrl, forAi, thumb } from '../lib/env.js';
 import { esc, icon, orb, beam, markSvg, applyTheme, watchTheme, toast, copyText, downloadDataUrl, fmtTime, uid } from '../lib/ui.js';
 import { openMarkup } from './markup.js';
+import { exportDocx } from './export.js';
+import { startRecording, extFor, fmtDur, fmtSize } from './recorder.js';
+import { putVideo, getVideo, pruneVideos, blobToDataUrl } from '../lib/videostore.js';
+import { saveSettings } from '../lib/settings.js';
 
 const $ = (s, r = document) => r.querySelector(s);
 const main = $('#main'), dock = $('#dock');
@@ -16,6 +20,7 @@ let ctrl = null, tick = null;
 const fresh = () => ({
   view: 'capture',        // capture | writing | review | filled | history
   shots: [],              // {id, dataUrl, original, marks, thumb, name}
+  videos: [],             // {id, name, mime, size, ms, dur, thumb, frames[]}; the video itself is in IndexedDB
   noShot: false,
   page: null,             // {url, title, capturedAt, viewport, errors|null, errorsIncluded}
   note: '', steps: '', stepsOpen: false,
@@ -41,13 +46,16 @@ function saveDraft() {
 }
 async function loadDraft() {
   const { draft } = await chrome.storage.local.get('draft');
-  if (draft && typeof draft === 'object') st = { ...fresh(), ...draft };
+  if (draft && typeof draft === 'object') st = { ...fresh(), ...draft, videos: draft.videos || [] };
 }
 async function history() { return (await chrome.storage.local.get('history')).history || []; }
 async function saveHistory(status) {
   if (!st.report) return;
   const list = await history();
   const id = st.report.createdAt;
+  // a report filled in Zoho stays "Filled" when it is copied or exported afterwards
+  const before = list.find((h) => h.id === id);
+  if (before && before.status === 'Filled in Zoho') status = before.status;
   const entry = { id, title: buildTitle(st.report, S), status, at: Date.now(), report: st.report, page: st.page && { ...st.page, errors: [] } };
   const next = [entry, ...list.filter((h) => h.id !== id)].slice(0, 20);
   await chrome.storage.local.set({ history: next });
@@ -103,7 +111,15 @@ async function refreshQuota() {
 const quotaHtml = () => (quotaNote ? `<div class="hint" role="status" style="text-align:center;color:var(--acc-text)">${esc(quotaNote)} <button type="button" class="btn b-ghost b-sm" data-action="usage" style="height:auto;padding:0 4px">Usage</button></div>` : '');
 const modelLabel = () => (S.ai.model === AUTO ? 'Auto model' : S.ai.model);
 
-const cap = () => ({ note: st.note, steps: st.steps, page: st.page, env, shotNames: st.shots.map((s) => s.name) });
+const cap = () => ({ note: st.note, steps: st.steps, page: st.page, env,
+  shotNames: [...st.shots.map((s) => s.name), ...(st.videos || []).flatMap((v) => v.frames.map((f, i) => `${v.name} (frame ${i + 1} of ${v.frames.length}, ${v.dur} video)`))] });
+// Screenshots, then a few frames of each recording, shrunk for the AI.
+async function aiImages() {
+  const out = [];
+  for (const s of st.shots) out.push(await forAi(s.dataUrl));
+  for (const v of st.videos || []) for (const f of v.frames) out.push(await forAi(f));
+  return out;
+}
 const stamp = (d = new Date()) => { const p = (n) => String(n).padStart(2, '0'); return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`; };
 // One name per screenshot, used in the report text, the Zoho attachment and Save screenshots.
 const shotName = () => `qarator_${stamp()}_${st.shots.length + 1}.png`;
@@ -140,15 +156,15 @@ async function addFiles(files) {
 // ---------- AI ----------
 async function write() {
   if (st.view === 'writing') return;
-  if (!st.shots.length && !st.note.trim()) { toast('Capture a screenshot or describe the problem first.'); $('#note')?.focus(); return; }
+  if (recording) { toast('Stop the recording first.'); return; }
+  if (!st.shots.length && !st.videos.length && !st.note.trim()) { toast('Capture a screenshot or describe the problem first.'); $('#note')?.focus(); return; }
   st.error = null;
   st.view = 'writing'; st.writing = { phase: 0 }; render();
   ctrl = new AbortController();
   try {
     if (!S.ai.apiKey && S.ai.provider !== 'compatible') throw new AIError('nokey', 'no key');
     if (!st.page) await notePage();
-    const images = [];
-    for (const s of st.shots) images.push(await forAi(s.dataUrl));
+    const images = await aiImages();
     setPhase(1);
     const { system, text, rule } = buildPrompt(S, cap());
     const p = generateAuto(S.ai, { system, text, images, json: true, maxTokens: 4096, kind: 'write' }, ctrl.signal, await quotaOpts());
@@ -177,8 +193,7 @@ async function rewrite(id) {
   if (st.busy) return;
   st.busy = 'rewrite:' + id; render();
   try {
-    const images = [];
-    for (const s of st.shots) images.push(await forAi(s.dataUrl));
+    const images = await aiImages();
     const { system, text } = rewritePrompt(S, cap(), st.report, id);
     const { text: out } = await generateAuto(S.ai, { system, text, images, json: true, maxTokens: 1500, kind: 'rewrite' }, undefined, await quotaOpts());
     const sec = st.report.sections.find((s) => s.id === id);
@@ -214,8 +229,8 @@ async function fillZoho() {
     title: { labels: labels(S.zoho.titleLabel), value: buildTitle(report, S) },
     description: { labels: labels(S.zoho.descriptionLabel), html: descriptionHtml(report), text: descriptionText(report), sections: report.sections.filter((s) => s.text.trim()).length },
     fields: S.fields.map((f) => ({ name: f.name, labels: labels(f.zohoLabel || f.name), value: report.fields[f.id] || '' })),
-    tags: { labels: labels(S.zoho.tagsLabel), values: report.tags.filter((t) => t.on).map((t) => t.name) },
-    attachments: { labels: labels(S.zoho.attachLabel), files: st.shots.map((s) => ({ name: s.name, dataUrl: s.dataUrl })) },
+    tags: { labels: labels(S.zoho.tagsLabel), values: S.zoho.fillTags ? report.tags.filter((t) => t.on).map((t) => t.name) : [] },
+    attachments: { labels: labels(S.zoho.attachLabel), files: [...st.shots.map((s) => ({ name: s.name, dataUrl: s.dataUrl })), ...(await videoFiles())] },
     steps: { enabled: !!S.zoho.stepsField, labels: labels(S.zoho.stepsLabel || 'Steps to Reproduce'), text: stepsText(report) },
     options: { looseMatch: S.zoho.looseMatch, scrollToFirst: S.zoho.scrollToFirst, emptyOnly: S.zoho.emptyOnly, uploadScreenshots: S.zoho.uploadScreenshots }
   };
@@ -229,9 +244,10 @@ async function fillZoho() {
     const good = res.map((r) => r.result).filter((r) => r && r.ok).sort((a, b) => b.results.filter((x) => x.status === 'filled').length - a.results.filter((x) => x.status === 'filled').length);
     st.busy = null;
     if (!good.length) { st.zoho = { kind: 'noform' }; render(); return; }
-    st.fill = { results: good[0].results, tabId: tab.id };
+    st.fill = { results: good[0].results, tabId: tab.id, at: Date.now() };
     st.view = 'filled';
     await saveHistory('Filled in Zoho');
+    await learn();
     saveDraft(); render(); $('#main').scrollTop = 0;
   } catch (e) {
     st.busy = null;
@@ -254,11 +270,123 @@ async function openZoho() {
   st.zoho = null; render();
 }
 
+async function videoFiles() {
+  const out = [];
+  for (const v of st.videos || []) {
+    const blob = await getVideo(v.id).catch(() => null);
+    if (blob) out.push({ name: v.name, dataUrl: await blobToDataUrl(blob) });
+  }
+  return out;
+}
+
+// Remember portal / module / page for this page, so the next bug here starts with the same names.
+async function learn() {
+  if (!st.report || !st.page || !st.page.url) return;
+  const next = learnRule(S.urlRules, st.page.url, st.report.segments);
+  if (next) { S.urlRules = next; await saveSettings(S); }
+}
+const tagSuggestions = () => (st.report ? suggestTags(st.report, S.tags.list, S.tags.max || 5) : []);
+
+async function exportWord() {
+  try {
+    const blob = await exportDocx(st, S, env, { tags: tagSuggestions() });
+    const base = `qarator_${stamp()}`;
+    const url = URL.createObjectURL(blob);
+    downloadDataUrl(url, `${base}.docx`);
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+    await saveVideos();
+    if (st.report) { await saveHistory('Exported to Word'); await learn(); }
+    toast(st.videos.length ? 'Word file and videos saved to Downloads' : 'Word file saved to Downloads');
+  } catch (e) { toast(`Export failed: ${e.message || e}`, 3500); }
+}
+async function saveVideos() {
+  for (const v of st.videos || []) {
+    const blob = await getVideo(v.id).catch(() => null);
+    if (!blob) continue;
+    const url = URL.createObjectURL(blob);
+    downloadDataUrl(url, v.name);
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+  }
+}
+
+// ---------- recording ----------
+let recording = null, recTick = 0;
+async function startRec(kind) {
+  if (recording) return;
+  const { tab } = await activeTab().catch(() => ({}));
+  if (kind === 'tab' && (!tab || !/^(https?|file):/.test(tab.url || ''))) { toast("Can't record this tab. Switch to the site you're testing first.", 3200); return; }
+  try {
+    recording = { kind, started: Date.now(), handle: null };
+    render();
+    recording.handle = await startRecording(kind, tab, { onEnd: () => stopRec() });
+    recording.started = Date.now();
+    if (!st.page && tab && /^(https?|file):/.test(tab.url || '')) st.page = { ...(await pageInfo(tab)), capturedAt: Date.now() };
+    render();
+  } catch (e) {
+    recording = null; render();
+    if (!e.cancelled) toast(kind === 'tab' ? 'Chrome did not allow recording this tab. Click the QArator icon on that tab, then try again, or use Record screen.' : `Recording did not start: ${e.message || e}`, 4500);
+  }
+}
+async function stopRec() {
+  if (!recording || !recording.handle || recording.stopping) return;
+  recording.stopping = true;
+  const out = await recording.handle.stop();
+  recording = null;
+  if (!out.blob.size) { toast('The recording was empty.'); render(); return; }
+  const id = uid();
+  await putVideo(id, out.blob);
+  st.videos.push({ id, name: `qarator_${stamp()}_rec${st.videos.length + 1}.${extFor(out.mime)}`, mime: out.mime, size: out.blob.size, ms: out.ms, dur: fmtDur(out.ms), thumb: out.thumb, frames: out.frames });
+  if (st.view === 'history' || st.view === 'filled') st.view = 'capture';
+  saveDraft(); render();
+}
+function recBar() {
+  if (!recording) return '';
+  const s = recording.handle ? fmtDur(Date.now() - recording.started) : 'starting';
+  return `<div class="rec" role="status"><span class="dotr" aria-hidden="true"></span><span style="flex:1">Recording ${recording.kind === 'tab' ? 'this tab' : 'screen'} · <span id="rec-t">${s}</span></span>
+    <button type="button" class="btn b-pri b-sm" data-action="stop-rec">Stop</button></div>`;
+}
+function startRecTimer() {
+  clearInterval(recTick);
+  if (!recording) return;
+  recTick = setInterval(() => { const t = $('#rec-t'); if (!recording) clearInterval(recTick); else if (t && recording.handle) t.textContent = fmtDur(Date.now() - recording.started); }, 1000);
+}
+async function playVideo(id) {
+  const v = st.videos.find((x) => x.id === id);
+  const blob = v && await getVideo(id).catch(() => null);
+  if (!blob) { toast('That video is no longer stored.'); return; }
+  const url = URL.createObjectURL(blob);
+  const host = $('#overlay');
+  host.innerHTML = `<div class="vplay" role="dialog" aria-label="${esc(v.name)}"><video src="${url}" controls autoplay></video>
+    <div style="color:#fff;font-size:12px">${esc(v.name)} · ${v.dur} · ${fmtSize(v.size)}</div>
+    <button type="button" class="btn b-sec" id="vclose">Close</button></div>`;
+  const close = () => { host.innerHTML = ''; URL.revokeObjectURL(url); };
+  $('#vclose').onclick = close;
+  host.querySelector('.vplay').onclick = (e) => { if (e.target.classList.contains('vplay')) close(); };
+}
+const videosHtml = () => (st.videos.length ? `<div><div class="lbl">Videos <span style="font-weight:400;color:var(--ink3)">${st.videos.length}</span></div><div class="shots">${st.videos.map((v, i) => `<div>
+  <div class="shot-img vid"><img src="${v.thumb}" alt="Video ${i + 1}"><span class="dur">${v.dur}</span></div>
+  <div class="shot-actions">
+    <button type="button" class="btn b-ghost b-sm" data-action="play-video" data-id="${v.id}" aria-label="Play video ${i + 1}">Play</button>
+    <button type="button" class="btn b-ghost b-sm" data-action="remove-video" data-id="${v.id}" aria-label="Remove video ${i + 1}">${icon.trash}Remove</button>
+  </div><div class="hint">${fmtSize(v.size)}</div></div>`).join('')}</div></div>` : '');
+const recButtons = (sm = true) => `<button type="button" class="btn b-ghost ${sm ? 'b-sm' : ''}" data-action="record-tab" title="Record this tab (Alt+Shift+R)" ${recording ? 'disabled' : ''}>${icon.video}Record tab</button>
+  <button type="button" class="btn b-ghost ${sm ? 'b-sm' : ''}" data-action="record-screen" title="Record a screen or window, with the mouse pointer" ${recording ? 'disabled' : ''}>${icon.screen}Record screen</button>`;
+
+// Three steps, always visible: where you are and where you can go back to.
+function renderFlow() {
+  const v = st.view === 'writing' ? 'capture' : st.view;
+  const steps = [['capture', 'Capture', true], ['review', 'Review', !!st.report], ['filled', 'Fill in Zoho', !!st.fill]];
+  const at = steps.findIndex((s) => s[0] === v);
+  $('#flow').innerHTML = v === 'history' ? '' : steps.map(([k, name, ok], i) => `<button type="button" data-action="flow" data-id="${k}" ${ok && st.view !== 'writing' ? '' : 'disabled'} ${i === at ? 'aria-current="step"' : ''} class="${i < at || (ok && i !== at) ? 'done' : ''}"><span class="n">${i < at && ok ? '✓' : i + 1}</span>${name}</button>`).join('');
+}
+
 // ---------- views ----------
 function setProj() { $('#proj').textContent = portalLabel(); }
 
 function render() {
   setProj();
+  renderFlow();
+  startRecTimer();
   main.className = '';
   const v = st.view;
   if (v === 'history') return renderHistory();
@@ -266,17 +394,17 @@ function render() {
   if (v === 'review' && st.report) return renderReview();
   if (v === 'filled' && st.fill) return renderFilled();
   if (st.error && st.error.kind === 'nokey' || st.error && st.error.kind === 'nobase') return renderNoKey();
-  if (!st.shots.length && !st.noShot) return renderEmpty();
+  if (!st.shots.length && !st.videos.length && !st.noShot && !recording) return renderEmpty();
   return renderCaptured();
 }
 const after = () => { applyTheme(); };
 
 async function renderEmpty() {
   const recent = (await history()).slice(0, 3);
-  if (st.view !== 'capture' || st.shots.length || st.noShot) return; // state changed while loading
+  if (st.view !== 'capture' || st.shots.length || st.videos.length || st.noShot || recording) return; // state changed while loading
   const { tab } = await activeTab().catch(() => ({}));
   const { onboarded } = await chrome.storage.local.get('onboarded');
-  if (st.view !== 'capture' || st.shots.length || st.noShot) return;
+  if (st.view !== 'capture' || st.shots.length || st.videos.length || st.noShot || recording) return;
   const setup = !onboarded && !S.ai.apiKey && S.ai.provider !== 'compatible';
   main.innerHTML = `
   ${setup ? `<div class="alert" role="region" aria-label="Set up QArator"><span class="alert-icon">${icon.key}</span>
@@ -286,6 +414,7 @@ async function renderEmpty() {
   <p class="hint" style="margin:4px 0 0">QArator saves the visible part of the tab with its URL, browser details and page errors.</p></div>
   <div class="stack">
     <button type="button" class="btn b-acc wide" data-action="capture" style="height:44px;font-size:14px">${icon.capture} Capture visible area <span class="kbd" style="margin-left:4px">Alt+Shift+S</span></button>
+    <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px">${recButtons(false).replace(/btn b-ghost/g, 'btn b-sec')}</div>
     <button type="button" class="btn b-sec wide" data-action="file">${icon.image} Add image from file</button>
   </div>
   <div class="drop-hint">${icon.paste}
@@ -362,12 +491,14 @@ function whereHtml() {
 function renderCaptured() {
   const n = st.shots.length;
   main.innerHTML = `
+  ${recBar()}
   ${errorBanner()}
   <div>
-    <div class="lbl between" style="margin-bottom:8px"><span>Screenshots <span style="font-weight:400;color:var(--ink3)">${n}</span></span>
-      <span style="display:flex;gap:2px;margin-right:-8px">
+    <div class="lbl between" style="margin-bottom:8px;flex-wrap:wrap"><span>Screenshots <span style="font-weight:400;color:var(--ink3)">${n}</span></span>
+      <span style="display:flex;gap:2px;margin-right:-8px;flex-wrap:wrap">
         <button type="button" class="btn b-ghost b-sm" data-action="capture" title="Capture visible area (Alt+Shift+S)">${icon.capture}Capture</button>
         <button type="button" class="btn b-ghost b-sm" data-action="file">${icon.plus}Add</button>
+        ${recButtons()}
       </span></div>
     ${n ? `<div class="shots">${st.shots.map((s, i) => `<div>
       <div class="shot-img"><img src="${s.thumb}" alt="Screenshot ${i + 1}">${s.marks.length ? '<span class="badge">Marked up</span>' : ''}</div>
@@ -375,8 +506,9 @@ function renderCaptured() {
         <button type="button" class="btn b-ghost b-sm" data-action="markup" data-id="${s.id}" aria-label="Mark up screenshot ${i + 1}">${icon.pen}Mark up</button>
         <button type="button" class="btn b-ghost b-sm" data-action="remove" data-id="${s.id}" aria-label="Remove screenshot ${i + 1}">${icon.trash}Remove</button>
       </div></div>`).join('')}</div>`
-      : `<div class="drop-hint"><div class="hint">No screenshot. Paste one with Ctrl+V, or describe the bug below.</div></div>`}
+      : st.videos.length ? '' : `<div class="drop-hint"><div class="hint">No screenshot. Paste one with Ctrl+V, or describe the bug below.</div></div>`}
   </div>
+  ${videosHtml()}
   ${st.page ? `<div>
     <div class="lbl">Page</div>
     <div class="mono url">${esc(st.page.url)}</div>
@@ -397,9 +529,11 @@ function renderCaptured() {
   </div>
   ${n || st.note ? '' : ''}
   <div><button type="button" class="btn b-ghost b-sm" data-action="reset" style="margin-left:-8px">Start over</button></div>`;
+  const nv = st.videos.length;
   dock.innerHTML = `
-  <button type="button" class="btn b-pri wide" data-action="write" style="height:40px">Write bug report <span class="kbd" style="margin-left:4px">Ctrl+Enter</span></button>
-  <div class="hint" style="text-align:center">Sends ${n ? `${n} screenshot${n === 1 ? '' : 's'}, ` : ''}your note${st.page?.errorsIncluded ? ', page errors' : ''}${st.page ? ' and the page address' : ''} to ${esc(providerName())} · ${esc(modelLabel())}.</div>
+  <button type="button" class="btn b-pri wide" data-action="write" style="height:40px" ${recording ? 'aria-disabled="true"' : ''}>Write bug report <span class="kbd" style="margin-left:4px">Ctrl+Enter</span></button>
+  <button type="button" class="btn b-sec wide b-sm" data-action="export-word" ${recording ? 'aria-disabled="true"' : ''}>${icon.download}Export to Word without AI</button>
+  <div class="hint" style="text-align:center">Sends ${n ? `${n} screenshot${n === 1 ? '' : 's'}, ` : ''}${nv ? `frames of ${nv} video${nv === 1 ? '' : 's'}, ` : ''}your note${st.page?.errorsIncluded ? ', page errors' : ''}${st.page ? ' and the page address' : ''} to ${esc(providerName())} · ${esc(modelLabel())}.</div>
   ${quotaHtml()}`;
   after();
   startRetryTimer();
@@ -484,7 +618,7 @@ function renderReview() {
   const tags = r.tags.map((t, i) => `<label class="tagc"><input type="checkbox" data-tag="${i}" ${t.on ? 'checked' : ''}>${esc(t.name)}</label>`).join('');
   main.innerHTML = `
   <div style="display:flex;align-items:center;justify-content:space-between;margin:-8px -8px -8px -8px">
-    <button type="button" class="btn b-ghost b-sm" data-action="back-capture">${icon.back}Back to capture</button>
+    <button type="button" class="btn b-ghost b-sm" data-action="back-capture">${icon.back}Screenshots and note</button>
     <span class="hint" style="margin-right:8px">${r.model ? `Written by ${esc(r.model)} · ` : ''}Draft · not submitted</span></div>
   <section aria-labelledby="h-title">
     <div class="row-between"><h2 class="h2" id="h-title">Title</h2><span class="hint" id="title-count">${countHtml()}</span></div>
@@ -503,14 +637,14 @@ function renderReview() {
     <div class="grid2" style="margin-top:10px;gap:12px 10px">${fields}</div>
   </section>
   <section aria-labelledby="h-tag">
-    <h2 class="h2" id="h-tag">Tags</h2>
+    <div class="row-between"><h2 class="h2" id="h-tag">Tags</h2><span class="hint">${S.zoho.fillTags ? 'Ticked tags are added in Zoho' : 'You add tags in Zoho; copy them after filling'}</span></div>
     <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px">${tags || '<span class="hint">No tags suggested.</span>'}</div>
     <div style="margin-top:8px;max-width:240px">${beam(`<input class="field" id="new-tag" aria-label="Add a tag" placeholder="Add a tag and press Enter" list="tag-list">`)}
       <datalist id="tag-list">${S.tags.list.map((t) => `<option value="${esc(t)}">`).join('')}</datalist></div>
   </section>
-  ${st.shots.length ? `<section aria-labelledby="h-att"><h2 class="h2" id="h-att">Attachments</h2>
-    <div class="thumbs" style="margin-top:10px">${st.shots.map((s, i) => `<img src="${s.thumb}" alt="Screenshot ${i + 1}">`).join('')}
-    <span class="hint">${st.shots.length} screenshot${st.shots.length === 1 ? '' : 's'}${S.zoho.uploadScreenshots ? ', uploaded when you fill the form' : ''}</span></div></section>` : ''}`;
+  ${st.shots.length || st.videos.length ? `<section aria-labelledby="h-att"><h2 class="h2" id="h-att">Attachments</h2>
+    <div class="thumbs" style="margin-top:10px">${[...st.shots, ...st.videos].map((s, i) => `<img src="${s.thumb}" alt="Attachment ${i + 1}">`).join('')}
+    <span class="hint">${[st.shots.length ? `${st.shots.length} screenshot${st.shots.length === 1 ? '' : 's'}` : '', st.videos.length ? `${st.videos.length} video${st.videos.length === 1 ? '' : 's'}` : ''].filter(Boolean).join(' and ')}${S.zoho.uploadScreenshots ? ', uploaded when you fill the form' : ''}</span></div></section>` : ''}`;
   const z = st.zoho;
   const banner = !z ? '' : z.kind === 'notzoho'
     ? `<div class="alert" role="alert"><span class="alert-icon">${icon.alert}</span><div><h2>Open the Zoho Submit Issue form first</h2>
@@ -524,12 +658,22 @@ function renderReview() {
   dock.innerHTML = `${banner}
   ${z && z.kind === 'notzoho' ? `<button type="button" class="btn b-sec wide" data-action="open-zoho">${z.zohoTabId ? 'Switch to Zoho tab' : 'Open Zoho Projects'} ${icon.external}</button>` : ''}
   ${`<button type="button" class="btn b-pri wide" data-action="fill" style="height:40px" ${filling ? 'aria-disabled="true"' : ''}>${filling ? orb('working', 20, '', true) + 'Filling Zoho form…' : 'Fill Zoho form <span class="kbd" style="margin-left:4px">Ctrl+Enter</span>'}</button>`}
-  <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px">
+  <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px">
     <button type="button" class="btn b-sec b-sm" data-action="copy-title">${icon.copy}Copy title</button>
     <button type="button" class="btn b-sec b-sm" data-action="copy-desc">${icon.copy}Copy description</button>
-    <button type="button" class="btn b-sec b-sm" data-action="save-shots" ${st.shots.length ? '' : 'disabled'}>${icon.download}Save screenshots</button>
+    <button type="button" class="btn b-sec b-sm" data-action="export-word">${icon.download}Export to Word</button>
+    <button type="button" class="btn b-sec b-sm" data-action="save-shots" ${st.shots.length || st.videos.length ? '' : 'disabled'}>${icon.download}Save files</button>
   </div>`;
   after();
+}
+
+function tagsHtml() {
+  const list = tagSuggestions();
+  if (!list.length) return '';
+  return `<section aria-labelledby="h-tags2"><div class="row-between"><div class="lbl" id="h-tags2" style="margin:0">Tags to add in Zoho · ${list.length}</div>
+    <button type="button" class="btn b-ghost b-sm" data-action="copy-tags" style="margin-right:-8px">${icon.copy}Copy all</button></div>
+    <div class="hint" style="margin:2px 0 4px">From your team's tag list. Copy one at a time and paste it into Zoho's tag box, or pick your own there.</div>
+    ${list.map((t, i) => `<div class="tagrow"><span>${esc(t)}</span><button type="button" class="btn b-sec b-sm" data-action="copy-tag" data-id="${i}" aria-label="Copy tag ${esc(t)}">${icon.copy}Copy</button></div>`).join('')}</section>`;
 }
 
 function renderFilled() {
@@ -549,13 +693,19 @@ function renderFilled() {
     ${filled.map((d) => `<div class="res-row"><span role="img" aria-label="Filled" style="color:var(--ink2);display:inline-flex">${icon.check}</span><span class="name">${esc(d.field)}</span><span class="hint val" title="${esc(d.value || '')}">${esc(d.value || '')}</span></div>`).join('') || '<div class="hint">Nothing was filled.</div>'}
   </section>
   ${kept.length ? `<section><div class="lbl">Left as is · ${kept.length}</div>
-    ${kept.map((d) => `<div class="res-row"><span aria-hidden="true" style="color:var(--ink3);display:inline-flex">–</span><span class="name">${esc(d.field)}</span><span class="hint val">${esc(d.reason || d.value || '')}</span></div>`).join('')}</section>` : ''}`;
-  dock.innerHTML = `
-  <button type="button" class="btn b-pri wide" data-action="next" style="height:40px">Start next bug <span class="kbd" style="margin-left:4px">Alt+Shift+S</span></button>
-  <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px">
-    <button type="button" class="btn b-sec b-sm" data-action="fill">Fill again</button>
-    <button type="button" class="btn b-sec b-sm" data-action="back-review">Back to report</button>
+    ${kept.map((d) => `<div class="res-row"><span aria-hidden="true" style="color:var(--ink3);display:inline-flex">–</span><span class="name">${esc(d.field)}</span><span class="hint val">${esc(d.reason || d.value || '')}</span></div>`).join('')}</section>` : ''}
+  ${tagsHtml()}
+  <div class="callout" id="change">
+    <div class="h2">Need to change something?</div>
+    <div class="hint" style="color:var(--ink2)">Press <strong>Edit report</strong>, change the title, text, fields or tags, then press <strong>Fill Zoho form</strong> again. QArator types over what it filled before. Nothing is lost while the Zoho form is open.</div>
+    <div><button type="button" class="btn b-sec b-sm" data-action="back-review">${icon.pen}Edit report</button></div>
   </div>`;
+  dock.innerHTML = `
+  <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px">
+    <button type="button" class="btn b-sec" data-action="back-review">${icon.pen}Edit report</button>
+    <button type="button" class="btn b-sec" data-action="fill">Fill again</button>
+  </div>
+  <button type="button" class="btn b-pri wide" data-action="next" style="height:40px">Done · start next bug</button>`;
   after();
 }
 
@@ -597,20 +747,34 @@ document.addEventListener('click', async (e) => {
       });
     }
     case 'write': return write();
+    case 'export-word': return exportWord();
+    case 'record-tab': return startRec('tab');
+    case 'record-screen': return startRec('screen');
+    case 'stop-rec': return stopRec();
+    case 'play-video': return playVideo(id);
+    case 'remove-video': st.videos = st.videos.filter((v) => v.id !== id); saveDraft(); pruneVideos(st.videos.map((v) => v.id)); return render();
+    case 'copy-tag': return copyText(tagSuggestions()[Number(id)], 'Tag copied');
+    case 'copy-tags': return copyText(tagSuggestions().join(', '), 'Tags copied');
+    case 'flow': {
+      if (id === 'capture') { st.view = 'capture'; st.zoho = null; }
+      else if (id === 'review' && st.report) st.view = 'review';
+      else if (id === 'filled' && st.fill) st.view = 'filled';
+      saveDraft(); return render();
+    }
     case 'cancel': ctrl && ctrl.abort(); return;
     case 'dismiss-error': st.error = null; saveDraft(); return render();
     case 'blank': return blankReport();
-    case 'reset': if (confirm('Clear the screenshots and note?')) { st = fresh(); saveDraft(); render(); } return;
+    case 'reset': if (confirm('Clear the screenshots, videos and note?')) { st = fresh(); saveDraft(); pruneVideos([]); render(); } return;
     case 'back-capture': st.view = 'capture'; st.zoho = null; saveDraft(); return render();
     case 'back-review': st.view = 'review'; saveDraft(); return render();
     case 'rewrite': return rewrite(id);
-    case 'copy-title': await copyText(buildTitle(st.report, S), 'Title copied'); return saveHistory('Copied, not filled');
-    case 'copy-desc': await copyText(descriptionText(st.report), 'Description copied'); return saveHistory('Copied, not filled');
-    case 'save-shots': st.shots.forEach((s) => downloadDataUrl(s.dataUrl, s.name)); return;
+    case 'copy-title': await copyText(buildTitle(st.report, S), 'Title copied'); await learn(); return saveHistory('Copied, not filled');
+    case 'copy-desc': await copyText(descriptionText(st.report), 'Description copied'); await learn(); return saveHistory('Copied, not filled');
+    case 'save-shots': st.shots.forEach((s) => downloadDataUrl(s.dataUrl, s.name)); return saveVideos();
     case 'fill': return fillZoho();
     case 'open-zoho': return openZoho();
     case 'goto': return gotoField(b.dataset.name);
-    case 'next': st = fresh(); saveDraft(); return render();
+    case 'next': st = fresh(); saveDraft(); pruneVideos([]); return render();
     case 'history': st.back = st.view === 'history' ? st.back : st.view; st.view = 'history'; return render();
     case 'history-back': st.view = st.back || 'capture'; return render();
     case 'history-clear': await chrome.storage.local.set({ history: [] }); return render();
@@ -675,6 +839,7 @@ chrome.tabs.onActivated.addListener(async ({ tabId }) => {
 });
 chrome.runtime.onMessage.addListener((msg) => {
   if (msg && msg.type === 'qarator:capture') { chrome.storage.session.remove('pendingCapture').catch(() => {}); captureTab(); }
+  if (msg && msg.type === 'qarator:record') { if (recording) stopRec(); else startRec('tab'); }
 });
 
 // ---------- start ----------

@@ -13,11 +13,12 @@ chrome.runtime.onStartup.addListener(enablePanelOnClick);
 enablePanelOnClick();
 
 chrome.commands.onCommand.addListener((command, tab) => {
-  if (command !== 'open-panel' && command !== 'capture') return;
+  if (command !== 'open-panel' && command !== 'capture' && command !== 'record') return;
   // sidePanel.open must run synchronously inside the user gesture.
   if (tab && tab.windowId !== undefined) {
     chrome.sidePanel.open({ windowId: tab.windowId }).catch(() => {});
   }
+  if (command === 'record') chrome.runtime.sendMessage({ type: 'qarator:record' }).catch(() => {});
   if (command === 'capture') {
     // If the panel is already open it captures right away; if it is still
     // loading it picks this flag up on start.

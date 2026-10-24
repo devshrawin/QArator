@@ -151,10 +151,10 @@ function secTitle() {
   </div>
   <div class="example"><div class="lab">Example</div><div class="t" id="ex-title">${esc(exampleTitle())}</div></div>
   <div><h3>URL rules</h3>
-  <p class="hint" style="margin:0 0 10px">Checked top to bottom; the first match fills each segment. Anything left empty is filled by AI from the page.</p>
+  <p class="hint" style="margin:0 0 10px">Checked top to bottom; the first match fills each segment. Without a rule, names are read from the page (breadcrumb, menu, heading). When you change them in a report and fill, copy or export it, QArator saves a rule for that page.</p>
   <div class="tbl-wrap"><table class="tbl"><thead><tr><th scope="col" style="width:34%">When the URL contains</th><th scope="col">Portal</th><th scope="col">Module</th><th scope="col">Page</th><th scope="col" style="width:96px"><span class="sr-only">Actions</span></th></tr></thead><tbody>
   ${S.urlRules.map((r, i) => `<tr>
-    <td>${B(`<input class="field mono" aria-label="URL contains, rule ${i + 1}" data-path="urlRules.${i}.match" value="${esc(r.match)}">`)}</td>
+    <td>${B(`<input class="field mono" aria-label="URL contains, rule ${i + 1}" data-path="urlRules.${i}.match" value="${esc(r.match)}">`)}${r.learned ? '<div class="hint">Learned from a report</div>' : ''}</td>
     <td>${B(`<input class="field" aria-label="Portal, rule ${i + 1}" data-path="urlRules.${i}.portal" value="${esc(r.portal)}" placeholder="—">`)}</td>
     <td>${B(`<input class="field" aria-label="Module, rule ${i + 1}" data-path="urlRules.${i}.module" value="${esc(r.module)}" placeholder="—">`)}</td>
     <td>${B(`<input class="field" aria-label="Page, rule ${i + 1}" data-path="urlRules.${i}.page" value="${esc(r.page)}" placeholder="—">`)}</td>
@@ -238,6 +238,7 @@ function secZoho() {
     ${cb('scrollToFirst', 'Scroll to the first field that needs a check')}
     ${cb('emptyOnly', 'Fill empty fields only', 'Keeps anything you already typed in the Zoho form.')}
     ${cb('stepsField', 'Also fill Zoho’s separate Steps to Reproduce box', 'The steps stay in the description too. Zoho limits this box to 1000 characters.')}
+    ${cb('fillTags', 'Also add ticked tags in Zoho', 'Off: after filling, QArator lists the suggested tags from your list with Copy buttons and you add them in Zoho.')}
     <label class="chk" style="cursor:default"><input type="checkbox" checked disabled><span>Leave Submit to me <span class="hint">· always on</span></span></label>
   </div>
   </section>`;

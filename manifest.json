@@ -28,7 +28,7 @@
     "service_worker": "background.js",
     "type": "module"
   },
-  "permissions": ["sidePanel", "storage", "unlimitedStorage", "tabs", "scripting", "activeTab"],
+  "permissions": ["sidePanel", "storage", "unlimitedStorage", "tabs", "scripting", "activeTab", "tabCapture", "desktopCapture"],
   "host_permissions": ["<all_urls>"],
   "content_scripts": [
     {
@@ -51,6 +51,10 @@
     "capture": {
       "suggested_key": { "default": "Alt+Shift+S" },
       "description": "Capture the visible area of the current tab"
+    },
+    "record": {
+      "suggested_key": { "default": "Alt+Shift+R" },
+      "description": "Start or stop recording the current tab"
     }
   }
 }
