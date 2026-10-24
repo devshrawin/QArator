@@ -90,15 +90,33 @@
     box.scrollIntoView({ block: 'center' });
     click(box); box.focus();
     let hit = await waitFor(find, 1500);
+    // Zoho shows the first 10 options and loads the rest as the list scrolls: scroll until nothing new arrives.
+    let seenAll = [...new Set(items().map((li) => li.innerText.trim()))];
+    for (let round = 0; !hit && round < 12; round++) {
+      const body = list()?.querySelector('.zdropdownlist__body, ul');
+      if (!body) break;
+      const before = items().length;
+      body.scrollTop = body.scrollHeight;
+      body.dispatchEvent(new Event('scroll', { bubbles: true }));
+      await sleep(350);
+      hit = await waitFor(find, 400);
+      seenAll = [...new Set([...seenAll, ...items().map((li) => li.innerText.trim())])];
+      if (!hit && items().length === before) break;
+    }
     if (!hit) {
       const search = list()?.querySelector('input.zdropdownlist__searchfield, input[type=text]');
-      if (search) { setNativeValue(search, value); hit = await waitFor(find, 2500); }
+      if (search) {
+        setNativeValue(search, value);
+        search.dispatchEvent(new KeyboardEvent('keyup', { key: value.slice(-1) || 'a', bubbles: true }));
+        hit = await waitFor(find, 3000);
+      }
     }
     if (!hit) {
-      const seen = [...new Set(items().map((li) => li.innerText.trim()))].slice(0, 8);
+      const seen = seenAll.slice(0, 20);
       document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', keyCode: 27, bubbles: true }));
-      return { ok: false, options: seen };
+      return { ok: false, options: seen, all: true };
     }
+    hit.scrollIntoView({ block: 'nearest' });
     hit.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
     click(hit);
     await sleep(250);
@@ -118,11 +136,24 @@
     input.scrollIntoView({ block: 'center' });
     click(input); input.focus();
     let hit = await waitFor(find, 1200);
+    // read the whole menu first (it loads more as it scrolls), then fall back to typing into the box
+    let seenAll = [...new Set(items().map((li) => li.innerText.trim()))];
+    for (let round = 0; !hit && round < 12; round++) {
+      const body = menu()?.querySelector('.zdropdownlist__body, ul');
+      if (!body) break;
+      const before = items().length;
+      body.scrollTop = body.scrollHeight;
+      body.dispatchEvent(new Event('scroll', { bubbles: true }));
+      await sleep(350);
+      hit = await waitFor(find, 400);
+      seenAll = [...new Set([...seenAll, ...items().map((li) => li.innerText.trim())])];
+      if (!hit && items().length === before) break;
+    }
     if (!hit) { setNativeValue(input, value); input.dispatchEvent(new KeyboardEvent('keyup', { key: value.slice(-1) || 'a', bubbles: true })); hit = await waitFor(find, 2500); }
     if (!hit) {
-      const seen = [...new Set(items().map((li) => li.innerText.trim()))].slice(0, 8);
+      setNativeValue(input, '');
       input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', keyCode: 27, bubbles: true }));
-      return { ok: false, options: seen };
+      return { ok: false, options: seenAll.slice(0, 20), all: seenAll.length > 0 };
     }
     click(hit);
     await sleep(250);
@@ -262,7 +293,8 @@
     if (c.tagName === 'SELECT') {
       const options = [...c.options];
       const hit = options.find((o) => o.text.trim() === f.value) || (opt.looseMatch && options.find((o) => loose(o.text) === loose(f.value)));
-      if (!hit) return { field: f.name, status: 'check', value: f.value, reason: `“${f.value}” not in list. Zoho offers ${options.map((o) => o.text.trim()).filter((t) => t && !/^(none|select)/i.test(t)).slice(0, 8).join(', ')}.` };
+      const offered = options.map((o) => o.text.trim()).filter((t) => t && !/^(-*none-*|select)$/i.test(t));
+      if (!hit) return { field: f.name, status: 'check', value: f.value, options: offered, reason: `“${f.value}” is not in Zoho's list. Zoho offers ${offered.slice(0, 20).join(', ')}.` };
       setNativeValue(c, hit.value);
       return { field: f.name, status: 'filled', value: hit.text.trim() };
     }
@@ -272,7 +304,8 @@
         : await pickCustom(c, f.value, opt.looseMatch);
       if (r.unsure) return { field: f.name, status: 'check', value: f.value, reason: `Picked “${f.value}” but Zoho did not confirm it. Check the dropdown.` };
       if (r.ok) return { field: f.name, status: 'filled', value: f.value };
-      return { field: f.name, status: 'check', value: f.value, reason: r.options.length ? `“${f.value}” not in list. Zoho offers ${r.options.join(', ')}.` : `Couldn't open the list to pick “${f.value}”. Choose it by hand.` };
+      return { field: f.name, status: 'check', value: f.value, options: r.all ? r.options : undefined,
+        reason: r.options.length ? `“${f.value}” is not in Zoho's list. Zoho offers ${r.options.join(', ')}.` : `Couldn't open the list to pick “${f.value}”. Choose it by hand.` };
     }
     const ed = editableOf(c);
     if (ed) return fillRich(c, f) ;
@@ -342,8 +375,8 @@
     const listed = files.filter((f) => document.body.innerText.includes(f.name)).length;
     target.setAttribute('data-qarator-field', 'Attachments');
     return listed
-      ? [{ field: 'Attachments', status: listed === files.length ? 'filled' : 'check', value: `${listed} of ${files.length} attached`, reason: listed === files.length ? '' : 'Some screenshots did not attach. Use Save screenshots and drag the rest in.' }]
-      : [{ field: 'Attachments', status: 'check', value: `${files.length} screenshot${files.length > 1 ? 's' : ''}`, reason: 'Zoho did not confirm the upload. Use Save screenshots and drag them onto the attachment area.' }];
+      ? [{ field: 'Attachments', status: listed === files.length ? 'filled' : 'check', value: `${listed} of ${files.length} attached`, reason: listed === files.length ? '' : 'Some files did not attach. Use Save files and drag the rest in.' }]
+      : [{ field: 'Attachments', status: 'check', value: `${files.length} file${files.length > 1 ? 's' : ''}`, reason: 'Zoho did not confirm the upload. Use Save files and drag them onto the attachment area.' }];
   }
 
   async function fillAttachments(conf, files, anchor) {
@@ -352,7 +385,7 @@
     if (!all.length) {
       const zone = document.querySelector('ruc-fileupload .attachment-bar, #add-form-attachment-bar, ruc-fileupload');
       if (zone) return dropFiles(zone, files);
-      return [{ field: 'Attachments', status: 'check', missing: true, value: `${files.length} screenshots`, reason: 'No attachment field found. Use Save screenshots and attach them by hand.' }];
+      return [{ field: 'Attachments', status: 'check', missing: true, value: `${files.length} files`, reason: 'No attachment field found. Use Save files and attach them by hand.' }];
     }
     let input = null;
     // prefer the file input next to an "Attach" label, then one in the same form/dialog as the title
@@ -377,10 +410,10 @@
       input.dispatchEvent(new Event('input', { bubbles: true }));
       input.dispatchEvent(new Event('change', { bubbles: true }));
       input.setAttribute('data-qarator-field', 'Attachments');
-      if (!input.multiple && files.length > 1) return [{ field: 'Attachments', status: 'check', value: `1 of ${files.length}`, reason: 'This form takes one file at a time. Attach the rest by hand (use Save screenshots).' }];
-      return [{ field: 'Attachments', status: 'filled', value: `${files.length} screenshot${files.length > 1 ? 's' : ''} attached` }];
+      if (!input.multiple && files.length > 1) return [{ field: 'Attachments', status: 'check', value: `1 of ${files.length}`, reason: 'This form takes one file at a time. Attach the rest by hand (use Save files).' }];
+      return [{ field: 'Attachments', status: 'filled', value: `${files.length} file${files.length > 1 ? 's' : ''} attached` }];
     } catch (e) {
-      return [{ field: 'Attachments', status: 'check', value: '', reason: 'The attachment field did not accept files. Use Save screenshots and attach them by hand.' }];
+      return [{ field: 'Attachments', status: 'check', value: '', reason: 'The attachment field did not accept files. Use Save files and attach them by hand.' }];
     }
   }
 

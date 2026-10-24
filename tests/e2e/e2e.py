@@ -5,10 +5,10 @@ from playwright.sync_api import sync_playwright
 
 EXT, OUT = os.path.abspath(sys.argv[1]), os.path.abspath(sys.argv[2])
 os.makedirs(OUT, exist_ok=True)
-PORT = int(sys.argv[3]) if len(sys.argv) > 3 else 8765
 HERE = os.path.dirname(os.path.abspath(__file__))
+PORT = int(sys.argv[3]) if len(sys.argv) > 3 else 8765
 ANSWER = json.load(open(os.path.join(HERE, "answer.json"), encoding="utf-8"))
-ANS = json.dumps(ANSWER)
+ANS = json.dumps(ANSWER).replace("localhost:8765", f"localhost:{PORT}")
 sys.stdout.reconfigure(encoding="utf-8")
 results, logs = [], []
 mode = {"v": "ok"}
@@ -218,8 +218,8 @@ try:
             steps = panel.input_value("#sec-steps")
             check("write: step numbering/bullets stripped", steps.split("\n") == ["Open the Department Portal and log in", "Click the theme toggle", "Open SEVI Dashboard > State Overview", "Observe the cards"], repr(steps))
             sev, pri, cls = panel.input_value("#fld-severity"), panel.input_value("#fld-priority"), panel.input_value("#fld-classification")
-            check("write: AI fields matched loosely", (sev, pri, cls) == ("Minor", "Medium", "Bug"), f"{sev}/{pri}/{cls}")
-            check("write: non-AI fields keep defaults", panel.input_value("#fld-test_phase") == "Smoke" and panel.input_value("#fld-device_type") == "Desktop")
+            check("write: AI fields matched loosely", (sev, pri, cls) == ("Minor", "Medium", "Backend"), f"{sev}/{pri}/{cls}")
+            check("write: non-AI fields keep defaults", panel.input_value("#fld-test_phase") == "Smoke" and panel.input_value("#fld-device_type") == "Web Application")
             tags = panel.locator(".tagc").all_inner_texts()
             check("write: tags limited to list, deduped", tags == ["UR - Department Portal"], str(tags))
             cur = panel.get_attribute("#flow [aria-current=step]", "data-id")
@@ -356,7 +356,7 @@ try:
         phase(auto_model)
 
         def no_screenshot_url():
-            panel.evaluate("() => chrome.storage.local.remove('draft')")
+            panel.wait_for_timeout(500); panel.evaluate("() => chrome.storage.local.remove('draft')")
             panel.reload(); panel.wait_for_timeout(800); panel.evaluate(PATCH)
             panel.click("[data-action=noshot]")
             panel.fill("#note", "Export button does nothing")
@@ -455,10 +455,10 @@ try:
             print("  zoho DOM:", json.dumps({**v, "desc": v["desc"][:300]}, indent=1))
             check("zoho(lyte): title filled", v["title"].startswith("UR | Department Portal"), v["title"])
             check("zoho(lyte): description HTML in iframe editor", "<b>Summary:</b>" in v["desc"] and "<ol>" in v["desc"])
-            want = {"Severity": "Minor", "Priority": "Medium", "Classification": "Bug", "Reproducible": "Always"}
-            check("zoho(lyte): dropdowns picked", all(v["picked"].get(k) == x for k, x in want.items() if k != "Test Phase") , str(v["picked"]))
+            want = {"Severity": "Minor", "Priority": "Medium", "Classification": "Backend", "Reproducible": "Always"}
+            check("zoho(lyte): dropdowns picked (Backend is option 16, loaded on scroll)", all(v["picked"].get(k) == x for k, x in want.items() if k != "Test Phase") , str(v["picked"]))
             check("zoho(lyte): Assignee 'Unassigned' left empty", "Assignee" not in v["picked"])
-            check("zoho(lyte): Device Type token", v["tokens"] == ["Desktop"], str(v["tokens"]))
+            check("zoho(lyte): Device Type token", v["tokens"] == ["Web Application"], str(v["tokens"]))
             check("zoho(lyte): tags from existing list", v["tags"] == ["UR - Department Portal", "UR - Department Portal - SEVI Dashboard"], str(v["tags"]))
             check("zoho(lyte): screenshot attached", "qarator_" in v["files"] and ".png" in v["files"], v["files"])
             check("zoho(lyte): video attached", "_rec1." in v["files"], v["files"])
@@ -476,6 +476,31 @@ try:
             try: site.wait_for_function("(window.__picked || {}).Severity === 'Major'", timeout=20000)
             except Exception: pass
             check("edit report + fill again updates Zoho", site.evaluate("(window.__picked || {}).Severity") == "Major", site.evaluate("JSON.stringify(window.__picked)"))
+            panel.wait_for_timeout(1500)
+            # an install still on the old Device Type list ("Desktop", which this Zoho does not have)
+            sw.evaluate("""async () => { const { settings } = await chrome.storage.local.get('settings');
+              const f = settings.fields.find((x) => x.id === 'device_type'); f.options = ['Desktop', 'Mobile', 'Tablet']; f.default = 'Desktop';
+              await chrome.storage.local.set({ settings }); }""")
+            panel.wait_for_timeout(300)
+            panel.click("#dock [data-action=back-review]")
+            panel.wait_for_selector("#fld-device_type")
+            panel.select_option("#fld-device_type", "Desktop")
+            site.evaluate("document.querySelectorAll('.ztokenfield__token').forEach((t) => t.remove())")
+            panel.click("#dock [data-action=fill]")
+            panel.wait_for_selector("[data-action=use-zoho-options]", timeout=30000)
+            msg = panel.inner_text("#main")
+            check("missing option: says Zoho's real list (not 'couldn't open')", "Web Application" in msg and "Couldn't open" not in msg, msg[msg.find("Device Type"):][:220])
+            shot("13-use-zoho-list")
+            panel.click("[data-action=use-zoho-options]")
+            panel.wait_for_timeout(500)
+            f = sw.evaluate("async () => (await chrome.storage.local.get('settings')).settings.fields.find((x) => x.id === 'device_type')")
+            check("Use Zoho's list: settings take Zoho's options", "Web Application" in f["options"] and "Desktop" not in f["options"], str(f["options"]))
+            panel.click("#dock [data-action=back-review]")
+            panel.select_option("#fld-device_type", "Web Application")
+            panel.click("#dock [data-action=fill]")
+            try: site.wait_for_function("[...document.querySelectorAll('.ztokenfield__token')].some((t) => t.textContent === 'Web Application')", timeout=20000)
+            except Exception: pass
+            check("fill again after update picks it", site.evaluate("[...document.querySelectorAll('.ztokenfield__token')].map((t) => t.textContent).join()") == "Web Application")
             panel.wait_for_timeout(1500)
             # steps box
             set_settings({"zoho": {"stepsField": True}})
@@ -508,7 +533,7 @@ try:
             print("  generic DOM:", json.dumps({**v, "d": v["d"][:200]}))
             check("generic: title by <label for>", v["t"].startswith("UR | "), v["t"])
             check("generic: contenteditable description", "<b>Summary:</b>" in v["d"])
-            check("generic: native selects (Severity/Priority/Classification)", (v["sev"], v["pri"], v["cls"]) == ("Major", "Medium", "Bug"), str(v))
+            check("generic: native selects (Severity/Priority/Classification)", (v["sev"], v["pri"], v["cls"]) == ("Major", "Medium", "Issue"), str(v))
             check("generic: alt label 'Is it reproducible'", v["rep"] == "Always", v["rep"])
             check("tags off by default: nothing typed into Zoho", v["chips"] == [], str(v["chips"]))
             check("tags: list to copy one at a time after filling", "Tags to add in Zoho" in out and panel.locator("[data-action=copy-tag]").count() >= 2, out[out.find("Tags to add"):][:200])
@@ -530,17 +555,19 @@ try:
             txt = [x.text for x in d.paragraphs]
             check("word (report): title, URL, sections, fields", txt[0].startswith("UR | Department Portal") and any(t.startswith("URL: http://localhost") for t in txt) and "Expected Result" in txt and "Issue fields" in txt, str(txt[:6]))
             check("word (report): screenshot embedded, video listed", len(d.inline_shapes) == 1 and any("_rec1." in t for t in txt), f"{len(d.inline_shapes)} images")
-            panel.evaluate("() => chrome.storage.local.remove('draft')")
+            panel.wait_for_timeout(500); panel.evaluate("() => chrome.storage.local.remove('draft')")
             panel.reload(); panel.wait_for_timeout(800); panel.evaluate(PATCH)
             site.goto(f"{BASE}/test.html"); site.wait_for_timeout(800)
             panel.click("#main [data-action=capture]")
             panel.wait_for_selector(".shots img", timeout=8000)
             panel.fill("#note", "Language toggle leaves the hero in English")
+            panel.wait_for_timeout(800); print("  probe after note:", panel.evaluate("async () => { const d = (await chrome.storage.local.get('draft')).draft; return d ? { view: d.view, shots: d.shots.length, note: d.note } : null; }"))
             panel.click("[data-action=toggle-steps]")
             panel.fill("#steps", "Open the citizen portal\nSwitch language to ML")
             with panel.expect_download() as dl:
                 panel.click("#dock [data-action=export-word]")
             path = os.path.join(OUT, "12-no-ai.docx"); dl.value.save_as(path)
+            panel.wait_for_timeout(800); print("  probe after export:", panel.evaluate("async () => { const d = (await chrome.storage.local.get('draft')).draft; return d ? { view: d.view, shots: d.shots.length, note: d.note } : null; }"))
             d = pydocx.Document(path)
             txt = [x.text for x in d.paragraphs]
             print("  no-AI word:", txt[:12])
@@ -570,7 +597,7 @@ try:
         phase(persistence_history)
 
         def paste_and_file():
-            panel.evaluate("() => chrome.storage.local.remove('draft')")
+            panel.wait_for_timeout(500); panel.evaluate("() => chrome.storage.local.remove('draft')")
             panel.reload(); panel.wait_for_timeout(800); panel.evaluate(PATCH)
             png = base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==")
             panel.set_input_files("#file", files=[{"name": "a.png", "mimeType": "image/png", "buffer": png}])

@@ -11,6 +11,6 @@
     "expected": "All dashboard components switch to the dark palette.",
     "actual": "The canvas and cards remain in light mode."
   },
-  "fields": { "severity": "minor", "priority": "Medium", "classification": "Bug" },
+  "fields": { "severity": "minor", "priority": "Medium", "classification": "backend" },
   "tags": ["ur - department portal", "made-up tag", "UR - Department Portal"]
 }

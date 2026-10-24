@@ -39,10 +39,16 @@ let env = { browser: '', os: '' };
 let saveTimer = 0;
 function saveDraft() {
   clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => {
-    const d = { ...st, view: st.view === 'writing' ? 'capture' : st.view === 'history' ? st.back : st.view, writing: null, busy: null, zoho: null, error: st.error && st.error.kind === 'ratelimit' ? st.error : null };
-    chrome.storage.local.set({ draft: d }).catch(() => {});
-  }, 300);
+  saveTimer = setTimeout(writeDraft, 300);
+}
+// Closing or hiding the panel saves at once, so nothing typed in the last moment is lost.
+function flushDraft() { if (saveTimer) { clearTimeout(saveTimer); saveTimer = 0; writeDraft(); } }
+addEventListener('pagehide', flushDraft);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushDraft(); });
+function writeDraft() {
+  saveTimer = 0;
+  const d = { ...st, view: st.view === 'writing' ? 'capture' : st.view === 'history' ? st.back : st.view, writing: null, busy: null, zoho: null, error: st.error && st.error.kind === 'ratelimit' ? st.error : null };
+  chrome.storage.local.set({ draft: d }).catch((e) => console.warn('QArator: draft not saved', e && e.message));
 }
 async function loadDraft() {
   const { draft } = await chrome.storage.local.get('draft');
@@ -268,6 +274,22 @@ async function openZoho() {
   const url = S.zoho.submitUrl || `https://${dom}/`;
   await chrome.tabs.create({ url });
   st.zoho = null; render();
+}
+
+// A dropdown whose value Zoho does not have: take Zoho's real option list into settings, then let the
+// tester pick the right value in the report and fill again.
+async function useZohoOptions(name) {
+  const res = st.fill && st.fill.results.find((r) => r.field === name && r.options);
+  const f = S.fields.find((x) => x.name === name);
+  if (!res || !f) return;
+  f.options = [...res.options];
+  if (!f.options.includes(f.default)) f.default = f.options[0];
+  await saveSettings(S);
+  if (st.report && !f.options.includes(st.report.fields[f.id])) { st.report.fields[f.id] = f.default; st.report.aiChosen[f.id] = false; }
+  res.options = null;
+  res.reason = `${name} now uses Zoho's ${f.options.length} options. Pick one in the report and fill again.`;
+  saveDraft(); render();
+  toast(`${name} options updated from Zoho`);
 }
 
 async function videoFiles() {
@@ -687,7 +709,8 @@ function renderFilled() {
   ${checks.length ? `<section><div class="lbl" style="color:var(--acc-text)">Needs a manual check · ${checks.length}</div>
     ${checks.map((c) => `<div class="check-item"><span class="alert-icon" style="margin-top:2px">${icon.alert}</span>
       <div style="flex:1;min-width:0"><div style="font-weight:600">${esc(c.field)}${c.value ? `: <span style="font-weight:400">${esc(c.value)}</span>` : ''}</div>
-      <div style="font-size:12px;color:var(--ink2);margin-top:2px">${esc(c.reason || '')}</div></div>
+      <div style="font-size:12px;color:var(--ink2);margin-top:2px">${esc(c.reason || '')}</div>
+      ${c.options && c.options.length ? `<button type="button" class="btn b-sec b-sm" data-action="use-zoho-options" data-name="${esc(c.field)}" style="margin-top:6px">Use Zoho's list for ${esc(c.field)}</button>` : ''}</div>
       ${c.missing ? '' : `<button type="button" class="btn b-sec b-sm" data-action="goto" data-name="${esc(c.field)}" aria-label="Go to ${esc(c.field)} in Zoho" style="flex:none">Go to field</button>`}</div>`).join('')}</section>` : ''}
   <section><div class="lbl">Filled · ${filled.length}</div>
     ${filled.map((d) => `<div class="res-row"><span role="img" aria-label="Filled" style="color:var(--ink2);display:inline-flex">${icon.check}</span><span class="name">${esc(d.field)}</span><span class="hint val" title="${esc(d.value || '')}">${esc(d.value || '')}</span></div>`).join('') || '<div class="hint">Nothing was filled.</div>'}
@@ -748,6 +771,7 @@ document.addEventListener('click', async (e) => {
     }
     case 'write': return write();
     case 'export-word': return exportWord();
+    case 'use-zoho-options': return useZohoOptions(b.dataset.name);
     case 'record-tab': return startRec('tab');
     case 'record-screen': return startRec('screen');
     case 'stop-rec': return stopRec();

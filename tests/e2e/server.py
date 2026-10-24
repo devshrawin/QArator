@@ -44,4 +44,5 @@ class H(SimpleHTTPRequestHandler):
         self._json(404, {})
 
 
+ANSWER = json.loads(json.dumps(ANSWER).replace("localhost:8765", f"localhost:{sys.argv[1]}"))
 ThreadingHTTPServer(("127.0.0.1", int(sys.argv[1])), H).serve_forever()

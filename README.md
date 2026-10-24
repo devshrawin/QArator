@@ -34,6 +34,13 @@ Settings › **Usage** counts every request per model for today, 7 or 30 days: r
 
 The **URL** section always carries the address of the page you captured (or the tab you're on when there's no screenshot). Portal, Module and Page for the title are read from that page: the host name (for example `...-department-portal.` gives *Department Portal*), the breadcrumb, the highlighted menu item, the selected tab and the heading. URL rules in Settings still win when one matches, and the AI fills anything left empty. All of it is editable in review.
 
+## Videos, Word export and tags
+
+- **Record tab** (Alt+Shift+R) records the page you're testing; **Record screen** opens Chrome's picker for a screen or window and shows the mouse pointer. Recordings are MP4, up to 5 minutes, attached to Zoho with the screenshots, and the AI reads a few frames of each.
+- **Export to Word** makes a .docx with the URL, location, environment, your note and steps, page errors and the screenshots; after Write it also holds the full report. No AI is needed for the export.
+- **Tags**: after filling, QArator lists the tags from your team list that fit this bug, each with a Copy button, so you add them in Zoho yourself (or turn on *Also add ticked tags in Zoho* in settings).
+- When a Zoho dropdown doesn't have QArator's value, the result shows Zoho's real options and **Use Zoho's list** updates your settings.
+
 ## Daily use
 
 | Step | What to do |
@@ -44,6 +51,7 @@ The **URL** section always carries the address of the page you captured (or the 
 | Write | **Ctrl+Enter** or **Write bug report** |
 | Review | Edit title segments, sections, fields and tags. **Rewrite** asks the AI for one section again |
 | Fill | Switch to the Zoho Submit Issue form, then **Ctrl+Enter** or **Fill Zoho form** |
+| Change | **Edit report**, change anything, then **Fill Zoho form** again; the steps bar at the top goes back to any step |
 | Check | The results list shows what was filled and what needs a manual check, with the reason. **Go to field** jumps to it |
 
 Page errors (console errors, uncaught exceptions, failed requests and resources) are collected on every site from the moment a tab loads. Tabs that were open before QArator was installed need one reload.
@@ -58,6 +66,7 @@ Page errors (console errors, uncaught exceptions, failed requests and resources)
 
 - `<all_urls>` host access: capture the visible tab, read page errors on the site under test, fill the Zoho form, and call your AI provider's API.
 - `sidePanel`, `tabs`, `scripting`, `activeTab`: open the panel, find the Zoho tab, inject the form filler.
+- `tabCapture`, `desktopCapture`: record the tab, or a screen or window you pick.
 - `storage`, `unlimitedStorage`: settings, the current draft (with screenshots) and recent reports.
 
 ## Zoho form matching

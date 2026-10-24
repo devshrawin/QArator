@@ -22,7 +22,7 @@ iframe{width:600px;height:200px;border:1px solid #999} .tagchip{background:#fed;
 const SELECTS = [
   ['Severity', ['None', 'Show stopper', 'Critical', 'Major', 'Minor']],
   ['Priority', ['None', 'Low', 'Medium', 'High']],
-  ['Classification', ['Issue', 'Bug', 'Enhancement', 'Suggestion']],
+  ['Classification', ['None', 'Functional', 'Security', 'Crash/Hang', 'Data loss', 'Performance', 'UI/Usabililty', 'Other bug', 'Feature(New)', 'Enhancement', 'UI', 'Suggestion', 'New Requirement', 'Change Request', 'UI/Usability', 'Backend', 'Issue']],
   ['Test Phase', ['Smoke', 'Sanity', 'Functional', 'Regression', 'UAT']],
   ['Reproducible', ['None', 'Always', 'Sometimes', 'Rarely', 'Unable']],
   ['Flag', ['Internal', 'External']],
@@ -30,10 +30,16 @@ const SELECTS = [
 ];
 const host = document.getElementById('selects');
 let n = 0;
+// Like Zoho: a listbox div with a scrolling body that shows 10 options and loads the rest on scroll.
 function list(id, opts, onPick) {
-  const ul = document.createElement('ul'); ul.id = id; ul.className = 'zdropdownlist'; ul.hidden = true;
-  opts.forEach((o) => { const li = document.createElement('li'); li.textContent = o; li.addEventListener('click', () => { onPick(o); ul.hidden = true; }); ul.appendChild(li); });
-  document.body.appendChild(ul); return ul;
+  const box = document.createElement('div'); box.id = id; box.className = 'zdropdownlist'; box.hidden = true;
+  const ul = document.createElement('ul'); ul.className = 'zdropdownlist__body'; ul.style.cssText = 'max-height:150px;overflow:auto;margin:0;padding:0';
+  box.appendChild(ul);
+  let shown = 0;
+  const more = () => { opts.slice(shown, shown + 10).forEach((o) => { const li = document.createElement('li'); li.setAttribute('role', 'option'); li.textContent = o; li.addEventListener('click', () => { onPick(o); box.hidden = true; }); ul.appendChild(li); }); shown = Math.min(opts.length, shown + 10); };
+  more();
+  ul.addEventListener('scroll', () => { if (ul.scrollTop + ul.clientHeight >= ul.scrollHeight - 4 && shown < opts.length) setTimeout(more, 150); });
+  document.body.appendChild(box); return box;
 }
 for (const [label, opts] of SELECTS) {
   const id = 'list-' + (n++);
@@ -50,7 +56,7 @@ for (const [label, opts] of SELECTS) {
   f.innerHTML = `<ruc-label><label>Device Type</label></ruc-label><ruc-select rc-label="Device Type"><div class="ztokenfield"><span class="tokens"></span><input class="ztokenfield__textbox" aria-owns="list-dev"></div></ruc-select>`;
   host.appendChild(f);
   const input = f.querySelector('input'), toks = f.querySelector('.tokens');
-  const ul = list('list-dev', ['Desktop', 'Mobile', 'Tablet'], (o) => { const s = document.createElement('span'); s.className = 'ztokenfield__token'; s.textContent = o; toks.appendChild(s); input.value = ''; });
+  const ul = list('list-dev', ['Mobile', 'Web Application', 'TOM', 'EFO', 'TVM', 'LTVM', 'SCS', 'AG', 'CC', 'HHD', 'TR'], (o) => { const s = document.createElement('span'); s.className = 'ztokenfield__token'; s.textContent = o; toks.appendChild(s); input.value = ''; });
   input.addEventListener('click', () => { const r = input.getBoundingClientRect(); ul.style.left = r.left + 'px'; ul.style.top = (r.bottom + scrollY) + 'px'; ul.hidden = false; });
 }
 // tags: suggestions only for existing tags
