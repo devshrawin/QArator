@@ -1,7 +1,7 @@
 // Word export of whatever the tester has: works with or without an AI report. Without one it holds
 // the page address, environment, the note, the tester's steps, page errors and the screenshots;
 // with one it adds the title, the written sections, the issue fields and suggested tags.
-import { buildDocx, dataUrlBytes } from '../lib/docx.js';
+import { buildDocx, dataUrlBytes, zip } from '../lib/docx.js';
 import { buildTitle, locate } from '../lib/report.js';
 import { loadImage } from '../lib/env.js';
 
@@ -27,10 +27,49 @@ function reportBody(r, S, { withTags = false } = {}) {
   return blocks;
 }
 
-/** Saved reports from Recent reports in one document, one per page. Text only: history keeps no screenshots. */
-export function exportReports(entries, S) {
+async function shotBlocks(shots) {
+  const out = [];
+  for (const s of shots || []) {
+    const img = await loadImage(s.dataUrl);
+    out.push({ img: { ...dataUrlBytes(s.dataUrl), w: img.naturalWidth, h: img.naturalHeight }, caption: s.name });
+  }
+  return out;
+}
+// Word cannot hold a video file usefully: show a still from it, and ship the file next to the document.
+async function videoBlocks(videos) {
+  const out = [];
+  for (const v of videos || []) {
+    const still = v.thumb || (v.frames || [])[0];
+    const caption = `Video ${v.name} · ${v.dur} · the file is in the videos folder of this download`;
+    if (!still) { out.push({ p: caption }); continue; }
+    const img = await loadImage(still);
+    out.push({ img: { ...dataUrlBytes(still), w: img.naturalWidth, h: img.naturalHeight }, caption });
+  }
+  return out;
+}
+async function mediaBlocks(shots, videos) {
   const blocks = [];
-  entries.forEach((h, i) => {
+  if ((videos || []).length) { blocks.push({ h2: 'Videos' }); blocks.push(...await videoBlocks(videos)); }
+  if ((shots || []).length) { blocks.push({ h2: 'Screenshots' }); blocks.push(...await shotBlocks(shots)); }
+  return blocks;
+}
+
+/**
+ * The download: the Word file alone, or a zip with the Word file and a videos folder when there are videos.
+ * videos: [{ name, blob }]
+ */
+export async function bundle(docx, base, videos = []) {
+  if (!videos.length) return { blob: docx, name: `${base}.docx` };
+  const bytes = async (b) => new Uint8Array(await b.arrayBuffer());
+  const files = [{ name: `${base}.docx`, data: await bytes(docx) }];
+  for (const v of videos) files.push({ name: `videos/${v.name}`, data: await bytes(v.blob) });
+  return { blob: zip(files, 'application/zip'), name: `${base}.zip` };
+}
+
+/** Saved reports from Recent reports in one document, one per page, with their screenshots and videos. */
+export async function exportReports(entries, S) {
+  const blocks = [];
+  for (const [i, h] of entries.entries()) {
     if (i) blocks.push({ pagebreak: true });
     const r = h.report, p = h.page || {};
     blocks.push({ h1: h.title || buildTitle(r, S) });
@@ -39,17 +78,9 @@ export function exportReports(entries, S) {
     if (loc) blocks.push({ kv: ['Location', loc] });
     blocks.push({ kv: ['Status', `${h.status} · ${when(h.at)}`] });
     blocks.push(...reportBody(r, S, { withTags: true }));
-  });
-  return buildDocx(blocks);
-}
-
-async function shotBlocks(shots) {
-  const out = [];
-  for (const s of shots || []) {
-    const img = await loadImage(s.dataUrl);
-    out.push({ img: { ...dataUrlBytes(s.dataUrl), w: img.naturalWidth, h: img.naturalHeight }, caption: s.name });
+    blocks.push(...await mediaBlocks(h.media?.shots, h.media?.videos));
   }
-  return out;
+  return buildDocx(blocks);
 }
 
 /**
@@ -72,14 +103,7 @@ export async function exportBugs(bugs, S, { full = true } = {}) {
       blocks.push({ h2: "What's wrong" });
       blocks.push({ p: note || '—' });
     }
-    if ((b.snap.videos || []).length) {
-      blocks.push({ h2: 'Videos' });
-      blocks.push({ list: b.snap.videos.map((v) => `${v.name} (${v.dur})`) });
-    }
-    if ((b.snap.shots || []).length) {
-      blocks.push({ h2: 'Screenshots' });
-      blocks.push(...await shotBlocks(b.snap.shots));
-    }
+    blocks.push(...await mediaBlocks(b.snap.shots, b.snap.videos));
   }
   return buildDocx(blocks);
 }
@@ -110,16 +134,6 @@ export async function exportDocx(st, S, env, { tags = [] } = {}) {
     blocks.push({ h2: 'Page errors' });
     blocks.push({ list: p.errors.slice(0, 20).map((e) => `${e.message}${e.source ? ` · ${e.source}` : ''}${e.count > 1 ? ` (×${e.count})` : ''}`) });
   }
-  if (st.videos && st.videos.length) {
-    blocks.push({ h2: 'Videos' });
-    blocks.push({ list: st.videos.map((v) => `${v.name} (${v.dur}, saved next to this document)`) });
-  }
-  if (st.shots.length) {
-    blocks.push({ h2: 'Screenshots' });
-    for (const s of st.shots) {
-      const img = await loadImage(s.dataUrl);
-      blocks.push({ img: { ...dataUrlBytes(s.dataUrl), w: img.naturalWidth, h: img.naturalHeight }, caption: s.name });
-    }
-  }
+  blocks.push(...await mediaBlocks(st.shots, st.videos));
   return buildDocx(blocks);
 }

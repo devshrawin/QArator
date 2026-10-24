@@ -7,7 +7,8 @@
 - **What's wrong is required** before generating or exporting.
 - **Backup AI key**: when the main key runs out or is rejected, the same model is tried on the backup key before other models. Quota and usage are tracked per key.
 - **Running-low alert**: the panel warns at 80% of a model's daily limit and when a key runs out (Google's free-tier limits are assumed until Google reports the real one; limits can be typed in Settings › Usage).
-- **Recent reports → Word**: tick reports (or Select all) and export them as one Word file, one report per page (text only; history keeps no screenshots).
+- **Recent reports → Word**: tick reports (or Select all) and export them as one Word file, one report per page with screenshots.
+- **Word exports carry the media**: screenshots are embedded; each video shows a still with its name and length, and the download is one zip with the Word file and a videos folder.
 - **Page errors are off by default** (Settings › Collect page errors). When off, the page hook is not injected and nothing about errors shows in the panel, the AI prompt or exports.
 - **Steps bar** (Capture · Review · Fill in Zoho) at the top of the panel; the filled screen explains how to change something: *Edit report*, then fill again.
 - **Tags**: QArator no longer types tags into Zoho by default; after filling it lists the matching tags from your team list with a Copy button each. *Also add ticked tags in Zoho* in settings turns filling back on.

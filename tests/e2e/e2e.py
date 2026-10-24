@@ -20,6 +20,18 @@ def check(name, ok, detail=""):
     print(("PASS " if ok else "FAIL ") + name + (f" :: {detail}" if detail else ""), flush=True)
 
 
+def open_export(dl, path):
+    """Save a download; a zip holds the Word file plus videos/. Returns (python-docx Document, names in zip or [])."""
+    import zipfile, docx as pydocx, io
+    dl.save_as(path)
+    if path.endswith(".zip") or zipfile.is_zipfile(path) and dl.suggested_filename.endswith(".zip"):
+        z = zipfile.ZipFile(path)
+        names = z.namelist()
+        doc = next(n for n in names if n.endswith(".docx"))
+        return pydocx.Document(io.BytesIO(z.read(doc))), names
+    return pydocx.Document(path), []
+
+
 def phase(fn):
     try:
         fn()
@@ -677,11 +689,12 @@ try:
             panel.wait_for_selector("#title-preview")
             with panel.expect_download() as dl:
                 panel.click("#dock [data-action=export-word]")
-            path = os.path.join(OUT, "11-report.docx"); dl.value.save_as(path)
-            d = pydocx.Document(path)
+            fname = dl.value.suggested_filename
+            d, names = open_export(dl.value, os.path.join(OUT, "11-report." + fname.split(".")[-1]))
             txt = [x.text for x in d.paragraphs]
+            check("word (report) with a video: one zip with the Word file and videos/", fname.endswith(".zip") and any(n.startswith("videos/") and n.endswith((".mp4", ".webm")) for n in names), f"{fname} {names}")
             check("word (report): title, URL, sections, fields", txt[0].startswith("UR | Department Portal") and any(t.startswith("URL: http://localhost") for t in txt) and "Expected Result" in txt and "Issue fields" in txt, str(txt[:6]))
-            check("word (report): screenshot embedded, video listed", len(d.inline_shapes) == 1 and any("_rec1." in t for t in txt), f"{len(d.inline_shapes)} images")
+            check("word (report): screenshot and video still embedded, video named", len(d.inline_shapes) == 2 and any("_rec1." in t and "videos folder" in t for t in txt), f"{len(d.inline_shapes)} images")
             set_settings({"pageErrors": False})
             sw.evaluate("() => new Promise((r) => setTimeout(r, 400))")
             check("page errors off: page hook unregistered", sw.evaluate("async () => (await chrome.scripting.getRegisteredContentScripts()).length") == 0)
@@ -736,8 +749,8 @@ try:
             import docx as pydocx
             with panel.expect_download() as dl:
                 panel.click("#hist-export")
-            path = os.path.join(OUT, "15-history.docx"); dl.value.save_as(path)
-            d = pydocx.Document(path)
+            d, names = open_export(dl.value, os.path.join(OUT, "15-history." + dl.value.suggested_filename.split(".")[-1]))
+            check("history export: screenshots come along", len(d.inline_shapes) >= 1, f"{len(d.inline_shapes)} images, {names}")
             titles = [x.text for x in d.paragraphs if x.text.startswith(("UR |", "Second bug"))]
             breaks = sum(1 for x in d.paragraphs if 'w:br w:type="page"' in x._p.xml or "w:type=\"page\"" in x._p.xml)
             check("history export: one file, one report per page", len(titles) == n and breaks == n - 1 and dl.value.suggested_filename.startswith("qarator_reports_"), f"{len(titles)} titles, {breaks} breaks, {dl.value.suggested_filename}")
@@ -746,7 +759,7 @@ try:
             check("history: reopen loads report", "Dark Mode" in panel.inner_text("#title-preview"))
             to_capture()
             t = panel.inner_text("#main")
-            check("history: reopened report has no screenshots kept", panel.locator(".shots img").count() == 0)
+            check("history: reopened report brings its screenshots back", panel.locator(".shots img").count() >= 1, str(panel.locator(".shots img").count()))
         phase(persistence_history)
 
         def paste_and_file():
@@ -869,7 +882,7 @@ try:
             # glow strength
             pick("glow", "off")
             op.focus("#ap-try")
-            op.wait_for_timeout(300)
+            op.wait_for_timeout(1000)  # let the focus-ring transition finish
             sh = css("#ap-try", "box-shadow")
             check("glow off: no beam, focus ring kept", css(wrap, "display", "::after") == "none" and "0px 0px 0px 3px" in sh and "/ 0) 0px 0px 0px 3px" not in sh, sh)
             pick("glow", "strong")

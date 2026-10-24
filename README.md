@@ -68,7 +68,7 @@ Page errors (console errors, uncaught exceptions, failed requests and resources)
 
 - Settings and the API key are stored only in this browser (`chrome.storage.local`).
 - Screenshots and your note go only to the AI provider you chose, and only when you press Write or Rewrite. Areas covered with **Hide** are blacked out in the pixels before anything is sent or attached.
-- Recent reports keep titles and text only, never screenshots.
+- Recent reports keep their screenshots and videos in this browser so they can be exported again; **Clear list** deletes them.
 
 ## Permissions and why
 

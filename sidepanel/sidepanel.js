@@ -7,10 +7,10 @@ import { buildPrompt, buildReport, buildTitle, descriptionText, descriptionHtml,
 import { detectEnv, fileToDataUrl, forAi, thumb } from '../lib/env.js';
 import { esc, icon, orb, beam, markSvg, applyTheme, applyAppearance, watchTheme, toast, copyText, downloadDataUrl, fmtTime, uid } from '../lib/ui.js';
 import { openMarkup } from './markup.js';
-import { exportDocx, exportReports, exportBugs } from './export.js';
+import { exportDocx, exportReports, exportBugs, bundle } from './export.js';
 import { loadBugs, updateBugs, patchBug, removeBugs, addBug, bugNote, STATUS } from './queue.js';
 import { startRecording, extFor, fmtDur, fmtSize } from './recorder.js';
-import { putVideo, getVideo, pruneVideos, blobToDataUrl } from '../lib/videostore.js';
+import { putVideo, getVideo, pruneVideos, blobToDataUrl, putMedia, getMedia, deleteMedia, allMedia } from '../lib/videostore.js';
 import { saveSettings } from '../lib/settings.js';
 
 const $ = (s, r = document) => r.querySelector(s);
@@ -67,6 +67,9 @@ async function saveHistory(status) {
   const entry = { id, title: buildTitle(st.report, S), status, at: Date.now(), report: st.report, page: st.page && { ...st.page, errors: [] } };
   const next = [entry, ...list.filter((h) => h.id !== id)].slice(0, 20);
   await chrome.storage.local.set({ history: next });
+  // screenshots and video list go to IndexedDB with the entry, so exports from history keep them
+  await putMedia(id, { shots: st.shots.map((s) => ({ name: s.name, dataUrl: s.dataUrl })), videos: st.videos || [] }).catch(() => {});
+  for (const old of list) if (!next.some((h) => h.id === old.id)) deleteMedia(old.id).catch(() => {});
 }
 
 // ---------- helpers ----------
@@ -375,7 +378,9 @@ function syncBug() {
   patchBug(st.bugId, { snap: { shots: st.shots, videos: st.videos, page: st.page, note: st.note, steps: st.steps }, report: st.report });
 }
 async function keepVideoIds() {
-  return [...(st.videos || []).map((v) => v.id), ...(await loadBugs()).flatMap((b) => (b.snap.videos || []).map((v) => v.id))];
+  const media = await allMedia().catch(() => []);
+  return [...(st.videos || []).map((v) => v.id), ...(await loadBugs()).flatMap((b) => (b.snap.videos || []).map((v) => v.id)),
+    ...(media || []).flatMap((m) => (m.videos || []).map((v) => v.id))];
 }
 async function pruneUnused() { pruneVideos(await keepVideoIds()); }
 const bugSel = new Set();
@@ -397,16 +402,22 @@ async function learn() {
 }
 const tagSuggestions = () => (st.report ? suggestTags(st.report, S.tags.list, S.tags.max || 5) : []);
 
+// One download: the Word file, or a zip with the Word file and its videos.
+async function download(docx, base, videos) {
+  const files = [];
+  for (const v of videos || []) { const blob = await getVideo(v.id).catch(() => null); if (blob) files.push({ name: v.name, blob }); }
+  const out = await bundle(docx, base, files);
+  const url = URL.createObjectURL(out.blob);
+  downloadDataUrl(url, out.name);
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
+  return { name: out.name, videos: files.length };
+}
 async function exportWord() {
   try {
     const blob = await exportDocx({ ...st, page: cap().page }, S, env, { tags: tagSuggestions() });
-    const base = `qarator_${stamp()}`;
-    const url = URL.createObjectURL(blob);
-    downloadDataUrl(url, `${base}.docx`);
-    setTimeout(() => URL.revokeObjectURL(url), 5000);
-    await saveVideos();
+    const out = await download(blob, `qarator_${stamp()}`, st.videos);
     if (st.report) { await saveHistory('Exported to Word'); await learn(); }
-    toast(st.videos.length ? 'Word file and videos saved to Downloads' : 'Word file saved to Downloads');
+    toast(out.videos ? 'Word file and videos saved to Downloads as one zip' : 'Word file saved to Downloads');
   } catch (e) { toast(`Export failed: ${e.message || e}`, 3500); }
 }
 async function saveVideos() {
@@ -863,9 +874,7 @@ const bugsDock = () => {
 async function exportBugList(full) {
   const list = (await loadBugs()).filter((b) => bugSel.has(b.id));
   if (!list.length) return;
-  const url = URL.createObjectURL(await exportBugs(list, S, { full }));
-  downloadDataUrl(url, `qarator_${full ? 'bugs' : 'notes'}_${stamp()}.docx`);
-  setTimeout(() => URL.revokeObjectURL(url), 5000);
+  await download(await exportBugs(list, S, { full }), `qarator_${full ? 'bugs' : 'notes'}_${stamp()}`, list.flatMap((b) => b.snap.videos || []));
   toast(`${list.length} bug${list.length === 1 ? '' : 's'} saved to Downloads`);
 }
 
@@ -884,18 +893,18 @@ async function renderHistory() {
     <div style="flex:1;min-width:0"><div class="t">${esc(h.title)}</div><div class="hint">${esc(h.status)} · ${new Date(h.at).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}</div></div>
     <button type="button" class="btn b-ghost b-sm" data-action="history-copy" data-id="${h.id}" aria-label="Copy title">${icon.copy}</button>
     <button type="button" class="btn b-sec b-sm" data-action="history-open" data-id="${h.id}">Open</button></div>`).join('')
-    : '<p class="hint">Reports you fill, copy or export appear here. Screenshots are not kept.</p>'}</div>`;
+    : '<p class="hint">Reports you fill, copy or export appear here, with their screenshots.</p>'}</div>`;
   dock.innerHTML = list.length ? histDock() : '';
   after();
 }
 const histDock = () => `<button type="button" class="btn b-pri wide" data-action="history-export" id="hist-export" ${histSel.size ? '' : 'aria-disabled="true"'}>${icon.download}${histSel.size ? `Export ${histSel.size} report${histSel.size === 1 ? '' : 's'} to Word` : 'Tick reports to export to Word'}</button>
-  <div class="hint" style="text-align:center">One Word file, one report per page. History keeps text only, so screenshots are not included.</div>`;
+  <div class="hint" style="text-align:center">One Word file, one report per page. Screenshots are included; videos come in the same zip.</div>`;
 async function exportHistory() {
   const list = (await history()).filter((h) => histSel.has(String(h.id)));
   if (!list.length) return;
-  const url = URL.createObjectURL(exportReports(list, S));
-  downloadDataUrl(url, `qarator_reports_${stamp()}.docx`);
-  setTimeout(() => URL.revokeObjectURL(url), 5000);
+  for (const h of list) h.media = (await getMedia(h.id).catch(() => null)) || {};
+  const docx = await exportReports(list, S);
+  await download(docx, `qarator_reports_${stamp()}`, list.flatMap((h) => h.media.videos || []));
   toast(`${list.length} report${list.length === 1 ? '' : 's'} saved to Downloads`);
 }
 
@@ -962,13 +971,16 @@ document.addEventListener('click', async (e) => {
     case 'history': st.back = st.view === 'history' ? st.back : st.view; st.view = 'history'; return render();
     case 'history-back': st.view = st.back || 'capture'; return render();
     case 'bugs-back': st.view = st.back || 'capture'; return render();
-    case 'history-clear': await chrome.storage.local.set({ history: [] }); histSel.clear(); return render();
+    case 'history-clear': { for (const h of await history()) deleteMedia(h.id).catch(() => {}); await chrome.storage.local.set({ history: [] }); histSel.clear(); pruneUnused(); return render(); }
     case 'history-export': return exportHistory();
     case 'history-copy': { const h = (await history()).find((x) => String(x.id) === id); if (h) copyText(h.title, 'Title copied'); return; }
     case 'history-open': {
       const h = (await history()).find((x) => String(x.id) === id);
       if (!h) return;
-      st = { ...fresh(), report: h.report, page: h.page, view: 'review' };
+      const m = (await getMedia(h.id).catch(() => null)) || {};
+      const shots = [];
+      for (const s of m.shots || []) shots.push({ id: uid(), dataUrl: s.dataUrl, original: s.dataUrl, marks: [], name: s.name, thumb: await thumb(s.dataUrl).catch(() => s.dataUrl) });
+      st = { ...fresh(), report: h.report, page: h.page, shots, videos: m.videos || [], view: 'review' };
       saveDraft(); return render();
     }
   }
