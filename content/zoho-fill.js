@@ -168,7 +168,7 @@
     if (!input) return null;
     const holder = input.closest('#addBugTag') || input.parentElement;
     holder.setAttribute('data-qarator-field', 'Tags');
-    // compare whole tag names: "ui" must not count as present because a chip says "APP - Build"
+    // compare whole tag names: "ui" must not count as present because a chip says "UR - Build"
     const chipSet = () => new Set([...(holder.querySelector('.associatedTags')?.children || [])].map((c) => loose(c.innerText)).filter(Boolean));
     const has = (t) => chipSet().has(loose(t));
     const out = []; const failed = [];

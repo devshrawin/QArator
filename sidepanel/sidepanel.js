@@ -758,7 +758,7 @@ function renderCaptured() {
     <button type="button" class="btn b-ghost b-sm" data-action="toggle-steps" aria-expanded="${st.stepsOpen}" style="margin-left:-8px;color:var(--ink2)">
       <span style="display:inline-flex;transform:${st.stepsOpen ? 'rotate(90deg)' : 'none'}">${icon.chevron}</span>Add your steps <span style="color:var(--ink3)">optional</span></button>
     ${st.stepsOpen ? `<label class="hint" for="steps" style="display:block;margin:6px 0 4px">One step per line. QArator keeps your wording.</label>
-    ${beam(`<textarea id="steps" class="field" rows="4" data-bind="steps" placeholder="Open the Orders page&#10;Set a date filter&#10;Click Export">${esc(st.steps)}</textarea>`)}` : ''}
+    ${beam(`<textarea id="steps" class="field" rows="4" data-bind="steps" placeholder="Open SEVI Dashboard&#10;Turn on dark mode">${esc(st.steps)}</textarea>`)}` : ''}
   </div>
   ${n || st.note ? '' : ''}
   <div><button type="button" class="btn b-ghost b-sm" data-action="reset" style="margin-left:-8px">Start over</button></div>`;

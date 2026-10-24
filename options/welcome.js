@@ -67,7 +67,7 @@ function team() {
     <p>If a teammate shared a QArator format file, import it and you're done. Otherwise set the two basics; the rest has team defaults you can change in settings.</p>
     <div><button type="button" class="btn b-sec" data-go="import">${icon.upload}Import format file</button></div>
     <div class="g2">
-      <div><label class="lbl" for="proj">Project code</label>${beam(`<input id="proj" class="field" value="${esc(S.title.project)}" placeholder="APP">`)}
+      <div><label class="lbl" for="proj">Project code</label>${beam(`<input id="proj" class="field" value="${esc(S.title.project)}" placeholder="UR">`)}
         <div class="hint" style="margin-top:4px">First part of every bug title.</div></div>
       <div><label class="lbl" for="zdom">Zoho Projects address</label>${beam(`<input id="zdom" class="field mono" value="${esc(S.zoho.domain)}" placeholder="projects.zoho.in">`)}
         <div class="hint" style="margin-top:4px"><button type="button" class="btn b-ghost b-sm" data-go="detect" style="margin-left:-8px;height:auto;padding:0 8px">Find it from an open Zoho tab</button></div></div>
