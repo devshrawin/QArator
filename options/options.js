@@ -1,9 +1,9 @@
 // QArator settings page. Edits a copy of the settings and autosaves.
-import { loadSettings, saveSettings, normalize, exportFormat, importFormat, DEFAULTS, PROVIDERS, LAYOUTS, SEGMENTS, slug } from '../lib/settings.js';
+import { loadSettings, saveSettings, normalize, exportFormat, importFormat, DEFAULTS, PROVIDERS, LAYOUTS, SEGMENTS, APPEARANCE, slug } from '../lib/settings.js';
 import { listModels, describeError, rankModels, cooldowns, AUTO } from '../lib/ai.js';
 import { summarize, parsePrices, rowCost, rupees, nextQuotaReset, istClock, usedToday } from '../lib/usage.js';
 import { buildTitle } from '../lib/report.js';
-import { esc, icon, beam, orb, markSvg, applyTheme, watchTheme, toast, fmtTime } from '../lib/ui.js';
+import { esc, icon, beam, orb, markSvg, applyTheme, applyAppearance, watchTheme, toast, fmtTime } from '../lib/ui.js';
 
 const $ = (s, r = document) => r.querySelector(s);
 const main = $('#main');
@@ -244,6 +244,24 @@ function secZoho() {
   </section>`;
 }
 
+function secAppearance() {
+  const a = S.appearance;
+  const group = (key, legend, hint = '') => `<fieldset class="segf"><legend class="lbl">${legend}</legend>
+    <div class="seg">${Object.entries(APPEARANCE[key]).map(([v, n]) => `<label><input type="radio" name="ap-${key}" value="${v}" data-path="appearance.${key}" ${a[key] === v ? 'checked' : ''}><span>${n}</span></label>`).join('')}</div>
+    ${hint ? `<div class="hint" style="margin-top:6px">${hint}</div>` : ''}</fieldset>`;
+  return `<section class="sec" id="appearance">
+  <div><h2>Appearance</h2><p class="desc">How the side panel and these pages look on this computer. Not included in format exports.</p></div>
+  <div class="g2">
+    ${group('theme', 'Theme', 'System follows your Windows or macOS setting.')}
+    ${group('fontSize', 'Text size')}
+    ${group('glow', 'Field glow', 'The light around a text box while you type in it.')}
+    ${group('motion', 'Animations', 'System turns them off when your computer asks for reduced motion.')}
+    ${group('density', 'Side panel spacing')}
+  </div>
+  <div style="max-width:360px"><label class="lbl" for="ap-try">Try it</label>${B('<input id="ap-try" class="field" placeholder="Click here to see the field glow">')}</div>
+  </section>`;
+}
+
 function secShare() {
   return `<section class="sec" id="share">
   <div><h2>Export and import</h2><p class="desc">Share one format across the team: title format, URL rules, sections, fields, tags, Zoho labels and the style example. Your API key is never exported.</p></div>
@@ -259,7 +277,7 @@ function secShare() {
 
 function render() {
   const y = scrollY;
-  main.innerHTML = secAI() + secLength() + secTitle() + secSections() + secFields() + secTags() + secStyle() + secZoho() + secUsage() + secShare();
+  main.innerHTML = secAI() + secLength() + secTitle() + secSections() + secFields() + secTags() + secStyle() + secZoho() + secUsage() + secAppearance() + secShare();
   applyTheme();
   scrollTo(0, y);
 }
@@ -273,6 +291,7 @@ document.addEventListener('input', (e) => {
   if (el.dataset.type === 'list') v = String(v).split(',').map((x) => x.trim()).filter(Boolean);
   if (el.type === 'radio' && !el.checked) return;
   setPath(path, v);
+  if (path.startsWith('appearance.')) applyAppearance(S);
   if (path === 'ai.apiKey' || path === 'ai.provider' || path === 'ai.baseUrl') {
     modelStatus = null;
     clearTimeout(keyTimer);
@@ -337,7 +356,7 @@ document.addEventListener('click', async (e) => {
     case 'import': return $('#import-file').click();
     case 'reset': {
       if (!confirm('Reset the whole format to the defaults? Your API key is kept.')) return;
-      const keep = S.ai; S = normalize(JSON.parse(JSON.stringify(DEFAULTS))); S.ai = keep; break;
+      const keep = S.ai, look = S.appearance; S = normalize(JSON.parse(JSON.stringify(DEFAULTS))); S.ai = keep; S.appearance = look; break;
     }
     case 'undo-import': S = undoImport; undoImport = null; clearTimeout(undoTimer); toast('Import undone'); break;
     default: return;
@@ -399,11 +418,13 @@ addEventListener('scroll', navSpy, { passive: true });
 (async function start() {
   $('#mark').innerHTML = markSvg(24);
   S = await loadSettings();
+  applyAppearance(S);
   await loadUsage();
   render();
   navSpy();
   chrome.storage.onChanged.addListener(async (c, area) => {
     if (area === 'local' && (c.usage || c.learnedLimits || c.modelCooldown)) { await loadUsage(); render(); }
+    if (area === 'local' && c.settings) applyAppearance(normalize(c.settings.newValue));
   });
   watchTheme();
   if (location.hash) document.querySelector(location.hash)?.scrollIntoView();

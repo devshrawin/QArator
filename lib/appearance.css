@@ -1,0 +1,55 @@
+/* Settings › Appearance. Attributes on <html> are set by applyAppearance() in ui.js
+   (and early by appearance-boot.js): data-theme, data-motion, data-font, data-glow, data-density. */
+
+/* ---- text size ---- */
+:root[data-font="small"] { --fs: .92; }
+:root[data-font="large"] { --fs: 1.12; }
+:root[data-font="larger"] { --fs: 1.25; }
+
+/* ---- field focus and hover ---- */
+:root {
+  --ring: color-mix(in srgb, var(--acc) 32%, transparent);
+  --halo: color-mix(in srgb, var(--acc) 22%, transparent);
+  --hover-ring: color-mix(in srgb, var(--acc) 16%, transparent);
+}
+.field { transition: border-color .15s ease, box-shadow .15s ease; }
+.field:hover:not(:disabled):not(:focus) { border-color: color-mix(in srgb, var(--acc) 55%, var(--fline)); box-shadow: 0 0 0 3px var(--hover-ring); }
+.field:focus, .field:focus-visible { outline: none; border-color: var(--acc); box-shadow: 0 0 0 3px var(--ring), 0 0 16px 2px var(--halo); }
+
+/* Border beam strength. The generated beam is very faint on a 32px field, so lift
+   the stroke a lot, the bloom a bit, and the inner wash only slightly (text stays legible). */
+[data-beam="qa-beam-l"] { --beam-stroke-opacity: 7; --beam-bloom-opacity: 2.6; --beam-inner-opacity: 1.5; }
+[data-beam="qa-beam-d"] { --beam-stroke-opacity: 3.6; --beam-bloom-opacity: 3.2; --beam-inner-opacity: 1.2; }
+
+:root[data-glow="subtle"] { --ring: color-mix(in srgb, var(--acc) 24%, transparent); --halo: transparent; --hover-ring: transparent; }
+:root[data-glow="subtle"] [data-beam="qa-beam-l"] { --beam-stroke-opacity: 3; --beam-bloom-opacity: 1.2; --beam-inner-opacity: 1; }
+:root[data-glow="subtle"] [data-beam="qa-beam-d"] { --beam-stroke-opacity: 1.8; --beam-bloom-opacity: 1.4; --beam-inner-opacity: 1; }
+
+/* Off: no beam and no halo, but keep a plain focus ring for keyboard users. */
+:root[data-glow="off"] { --halo: transparent; --hover-ring: transparent; --ring: color-mix(in srgb, var(--acc) 24%, transparent); }
+:root[data-glow="off"] [data-beam]::before,
+:root[data-glow="off"] [data-beam]::after,
+:root[data-glow="off"] [data-beam] [data-beam-bloom] { display: none !important; }
+
+/* ---- motion ---- */
+:root[data-motion="off"] *, :root[data-motion="off"] *::before, :root[data-motion="off"] *::after {
+  animation-duration: 0s !important; animation-iteration-count: 1 !important; animation-delay: 0s !important;
+  transition-duration: 0s !important; scroll-behavior: auto !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  :root:not([data-motion="on"]) *, :root:not([data-motion="on"]) *::before, :root:not([data-motion="on"]) *::after {
+    animation-duration: 0s !important; animation-iteration-count: 1 !important; animation-delay: 0s !important;
+    transition-duration: 0s !important;
+  }
+}
+
+/* ---- compact side panel ---- */
+:root[data-density="compact"] #app #main { padding: 10px 12px; gap: 12px; }
+:root[data-density="compact"] #app #main.center { padding: 20px 16px; }
+:root[data-density="compact"] #app .dock { padding: 8px 12px 10px; gap: 6px; }
+:root[data-density="compact"] #app .flow { padding: 6px 10px; }
+:root[data-density="compact"] #app .btn { height: 32px; }
+:root[data-density="compact"] #app .b-sm { height: 26px; }
+:root[data-density="compact"] #app input.field, :root[data-density="compact"] #app select.field { height: 28px; }
+:root[data-density="compact"] #app .stack { gap: 6px; }
+:root[data-density="compact"] #app .res-row { padding: 5px 0; }

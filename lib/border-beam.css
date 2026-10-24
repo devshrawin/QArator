@@ -401,4 +401,4 @@
 
 
 [data-beam]{overflow:visible !important;display:block}
-@media (prefers-reduced-motion: reduce){[data-beam],[data-beam]::before,[data-beam]::after{animation-duration:0s !important;animation-iteration-count:1 !important}}
+@media (prefers-reduced-motion: reduce){:root:not([data-motion="on"]) [data-beam],:root:not([data-motion="on"]) [data-beam]::before,:root:not([data-motion="on"]) [data-beam]::after{animation-duration:0s !important;animation-iteration-count:1 !important}}

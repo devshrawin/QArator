@@ -1,8 +1,8 @@
 // First-run setup: AI key (tested on the spot), team format, then how to capture. Every answer is
 // saved as it is given, so closing the tab half way loses nothing.
-import { loadSettings, saveSettings, importFormat, PROVIDERS } from '../lib/settings.js';
+import { loadSettings, saveSettings, normalize, importFormat, PROVIDERS } from '../lib/settings.js';
 import { listModels, rankModels, describeError, AUTO } from '../lib/ai.js';
-import { esc, icon, beam, orb, markSvg, applyTheme, watchTheme, toast } from '../lib/ui.js';
+import { esc, icon, beam, orb, markSvg, applyTheme, applyAppearance, watchTheme, toast } from '../lib/ui.js';
 
 const $ = (s, r = document) => r.querySelector(s);
 const STEPS = ['intro', 'key', 'team', 'try'];
@@ -168,6 +168,8 @@ document.addEventListener('keydown', (e) => {
 (async function start() {
   $('#mark').innerHTML = markSvg(24);
   S = await loadSettings();
+  applyAppearance(S);
+  chrome.storage.onChanged.addListener((c, area) => { if (area === 'local' && c.settings) applyAppearance(normalize(c.settings.newValue)); });
   watchTheme();
   render();
 })();
