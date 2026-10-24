@@ -13,7 +13,13 @@ const KEY_LINKS = {
   openai: ['https://platform.openai.com/api-keys', 'Create a key on the OpenAI platform']
 };
 
-async function save() { await saveSettings(S); }
+// Writes only what this page asks for, on top of the settings as stored now, so a change made in the
+// settings page (or anywhere else) while setup is open is never overwritten by this page's older copy.
+async function save() {
+  const cur = await loadSettings();
+  S = { ...cur, ai: { ...cur.ai, ...S.ai }, title: { ...cur.title, project: S.title.project }, zoho: { ...cur.zoho, domain: S.zoho.domain } };
+  await saveSettings(S);
+}
 
 function dots() {
   $('#dots').innerHTML = STEPS.map((s, i) => `<i class="${i <= step ? 'on' : ''}"></i>`).join('');
@@ -156,7 +162,7 @@ document.addEventListener('change', async (e) => {
   if (t.id === 'import-file') {
     const f = t.files[0]; t.value = '';
     if (!f) return;
-    try { S = importFormat(S, JSON.parse(await f.text())); await save(); toast('Format imported'); render(); }
+    try { S = importFormat(await loadSettings(), JSON.parse(await f.text())); await saveSettings(S); toast('Format imported'); render(); }
     catch (err) { toast(err instanceof SyntaxError ? 'That file is not valid JSON.' : err.message, 3500); }
   }
 });

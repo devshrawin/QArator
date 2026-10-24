@@ -12,6 +12,8 @@ body { overflow: hidden; }
 .dock:empty { display: none; }
 .flow { flex: none; display: flex; gap: 4px; padding: 8px 12px; border-bottom: 1px solid var(--line); }
 .flow:empty { display: none; }
+#recbar:empty { display: none; }
+#recbar { flex: none; padding: 8px 12px 0; }
 .flow button { flex: 1; min-width: 0; display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 30px; border-radius: 6px; border: 0; background: transparent; color: var(--ink3); font: inherit; font-size: calc(12px * var(--fs)); cursor: pointer; }
 .flow button .n { width: 18px; height: 18px; flex: none; border-radius: 9px; display: inline-flex; align-items: center; justify-content: center; font-size: calc(11px * var(--fs)); font-weight: 600; background: var(--chip); color: var(--ink2); }
 .flow button[aria-current="step"] { background: var(--acc-soft); color: var(--acc-text); font-weight: 600; }

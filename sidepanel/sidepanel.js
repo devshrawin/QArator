@@ -1,7 +1,7 @@
 // QArator side panel. One small state object, re-rendered per view; typing
 // updates state without re-rendering so focus and caret stay put.
 import { loadSettings, onSettingsChanged, PROVIDERS } from '../lib/settings.js';
-import { generateAuto, parseJson, describeError, AIError, AUTO, cooldowns } from '../lib/ai.js';
+import { generateAuto, parseJson, describeError, AIError, AUTO, cooldowns, parseSlot } from '../lib/ai.js';
 import { nearLimit, usedToday, istClock, parseLimits } from '../lib/usage.js';
 import { buildPrompt, buildReport, buildTitle, descriptionText, descriptionHtml, rewritePrompt, rewriteResult, locate, isText, stepsText, matchOption, looseKey, learnRule, suggestTags } from '../lib/report.js';
 import { detectEnv, fileToDataUrl, forAi, thumb } from '../lib/env.js';
@@ -11,6 +11,7 @@ import { exportDocx, exportReports, exportBugs, bundle } from './export.js';
 import { loadBugs, updateBugs, patchBug, removeBugs, addBug, bugNote, STATUS } from './queue.js';
 import { startRecording, extFor, fmtDur, fmtSize } from './recorder.js';
 import { putVideo, getVideo, pruneVideos, blobToDataUrl, putMedia, getMedia, deleteMedia, allMedia } from '../lib/videostore.js';
+import { loadImage } from '../lib/env.js';
 import { saveSettings } from '../lib/settings.js';
 
 const $ = (s, r = document) => r.querySelector(s);
@@ -48,17 +49,22 @@ addEventListener('pagehide', flushDraft);
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushDraft(); });
 function writeDraft() {
   saveTimer = 0;
-  const d = { ...st, view: st.view === 'writing' ? 'capture' : st.view === 'history' || st.view === 'bugs' ? st.back : st.view, writing: null, busy: null, zoho: null, error: st.error && st.error.kind === 'ratelimit' ? st.error : null };
+  const view = st.view === 'writing' ? 'capture' : st.view === 'history' || st.view === 'bugs' ? st.back : st.view;
+  const d = { ...st, view: ['writing', 'history', 'bugs'].includes(view) || !view ? 'capture' : view, back: 'capture', writing: null, busy: null, zoho: null, error: st.error && st.error.kind === 'ratelimit' ? st.error : null };
   chrome.storage.local.set({ draft: d }).catch((e) => console.warn('QArator: draft not saved', e && e.message));
   syncBug();
 }
 async function loadDraft() {
   const { draft } = await chrome.storage.local.get('draft');
-  if (draft && typeof draft === 'object') st = { ...fresh(), ...draft, videos: draft.videos || [] };
+  if (draft && typeof draft === 'object') st = { ...fresh(), ...draft, videos: draft.videos || [], shots: draft.shots || [], writing: null, busy: null };
+  if (['writing', 'history', 'bugs'].includes(st.view)) st.view = 'capture';
+  if (st.view === 'review' && !st.report) st.view = 'capture';
+  if (st.view === 'filled' && !st.fill) st.view = st.report ? 'review' : 'capture';
 }
 async function history() { return (await chrome.storage.local.get('history')).history || []; }
-async function saveHistory(status) {
-  if (!st.report) return;
+async function saveHistory(status, s = st) {
+  if (!s.report) return;
+  const st = s; // the report this is about, even if the panel moved on
   const list = await history();
   const id = st.report.createdAt;
   // a report filled in Zoho stays "Filled" when it is copied or exported afterwards
@@ -101,16 +107,16 @@ async function pageInfo(tab) {
   }
 }
 // The page under test when there is no capture yet (a pasted image, or a bug without a screenshot).
-async function notePage() {
+async function notePage(s = st) {
   const { tab } = await activeTab().catch(() => ({}));
-  if (tab && /^(https?|file):/.test(tab.url || '')) st.page = { ...(await pageInfo(tab)), capturedAt: Date.now() };
+  if (tab && /^(https?|file):/.test(tab.url || '')) s.page = { ...(await pageInfo(tab)), capturedAt: Date.now() };
 }
 // Only limits Google reported or the tester typed stop a model from being tried; assumed ones only warn.
 async function quotaOpts() {
   const { usage, learnedLimits = {} } = await chrome.storage.local.get(['usage', 'learnedLimits']);
   return { limits: { ...learnedLimits, ...parseLimits(S.usage.limits) }, used: (m, k) => usedToday(usage, m, k) };
 }
-const keyName = (m) => m.replace(/@backup$/, ' (backup key)');
+const keyName = (slot) => { const p = parseSlot(slot); return p.model + (p.tag === 'backup' ? ' (backup key)' : ''); };
 // A warning under the Generate buttons when a model is running low, used up or resting.
 let quota = null; // { level: 'low' | 'out', text, needBackup }
 async function refreshQuota() {
@@ -120,7 +126,7 @@ async function refreshQuota() {
   const hits = nearLimit(usage, { learned: learnedLimits, typed: parseLimits(S.usage.limits) });
   const parts = hits.map((h) => `${h.model}${h.key === 'backup' ? ' (backup key)' : ''}: ${h.used} of ${h.source === 'assumed' ? 'about ' : ''}${h.limit} requests used today`);
   if (resting.length) parts.push(`${resting.map(([m]) => keyName(m)).join(', ')} resting until ${istClock(Math.min(...resting.map(([, u]) => u)))}`);
-  const mainOut = resting.some(([m]) => !m.endsWith('@backup')) || hits.some((h) => h.key === 'main' && h.out);
+  const mainOut = resting.some(([m]) => parseSlot(m).tag === 'main') || hits.some((h) => h.key === 'main' && h.out);
   const usingBackup = hasBackup && mainOut;
   const next = !parts.length ? null : {
     level: mainOut || hits.some((h) => h.out) ? 'out' : 'low',
@@ -167,12 +173,22 @@ function askForNote() {
 }
 const stamp = (d = new Date()) => { const p = (n) => String(n).padStart(2, '0'); return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`; };
 // One name per screenshot, used in the report text, the Zoho attachment and Save screenshots.
-const shotName = () => `qarator_${stamp()}_${st.shots.length + 1}.png`;
+const shotName = (dataUrl = '') => `qarator_${stamp()}_${st.shots.length + 1}.${/^data:image\/jpeg/.test(dataUrl) ? 'jpg' : 'png'}`;
+let markupOpening = false;
+// Word and Zoho take PNG and JPEG; anything else pasted (WebP, GIF, SVG, AVIF…) becomes a PNG.
+async function asPngOrJpeg(dataUrl) {
+  if (/^data:image\/(png|jpeg)[;,]/.test(dataUrl)) return dataUrl;
+  const img = await loadImage(dataUrl);
+  const w = img.naturalWidth || 1280, h = img.naturalHeight || 800;
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  c.getContext('2d').drawImage(img, 0, 0, w, h);
+  return c.toDataURL('image/png');
+}
 
 // ---------- shots ----------
 async function addShot(dataUrl, name) {
   const t = await thumb(dataUrl).catch(() => dataUrl);
-  st.shots.push({ id: uid(), dataUrl, original: dataUrl, marks: [], thumb: t, name: name || shotName() });
+  st.shots.push({ id: uid(), dataUrl, original: dataUrl, marks: [], thumb: t, name: name || shotName(dataUrl) });
   st.error = st.error && st.error.kind === 'nokey' ? st.error : null;
   if (st.view === 'history' || st.view === 'filled') st.view = 'capture';
   saveDraft(); render();
@@ -188,35 +204,51 @@ async function captureTab() {
   catch (e) { toast('Capture failed. Click the page once, then try again.', 3200); return; }
   const info = await pageInfo(tab);
   st.page = { ...info, capturedAt: Date.now() };
-  if (st.view !== 'review') st.view = 'capture';
+  if (st.view !== 'review' && st.view !== 'writing') st.view = 'capture';
   await addShot(dataUrl);
 }
 async function addFiles(files) {
   const imgs = [...files].filter((f) => f.type.startsWith('image/'));
   if (!imgs.length) { toast('That file is not an image.'); return; }
   if (!st.page) await notePage();
-  for (const f of imgs) await addShot(await fileToDataUrl(f));
+  for (const f of imgs) {
+    try { await addShot(await asPngOrJpeg(await fileToDataUrl(f))); }
+    catch (e) { toast(`${f.name || 'That image'} could not be read.`, 3000); }
+  }
 }
 
 // ---------- AI ----------
+let writingNow = false;
 async function write() {
-  if (st.view === 'writing') return;
+  if (writingNow || st.view === 'writing') return;
   if (recording) { toast('Stop the recording first.'); return; }
   if (needNote()) { askForNote(); return; }
-  st.error = null;
-  st.view = 'writing'; st.writing = { phase: 0 }; render();
-  ctrl = new AbortController();
+  const mine = st;
+  writingNow = true; // before the first render, which would otherwise treat 'writing' as left over
+  mine.error = null;
+  mine.view = 'writing'; mine.writing = { phase: 0 };
+  const myCtrl = ctrl = new AbortController();
+  render();
   try {
-    if (!st.page) await notePage();
-    st.report = await generateFor(st, ctrl.signal, (n) => { if (n !== 2 || (st.writing && st.writing.phase === 1)) setPhase(n); });
-    if (st.bugId) patchBug(st.bugId, { status: 'ready', report: st.report, error: null });
-    st.view = 'review'; st.writing = null; st.zoho = null;
-    saveDraft(); render(); $('#main').scrollTop = 0;
+    if (!mine.page) await notePage(mine);
+    const report = await generateFor(mine, myCtrl.signal, (n) => { if (st === mine && (n !== 2 || (mine.writing && mine.writing.phase === 1))) setPhase(n); });
+    mine.report = report; mine.writing = null; mine.zoho = null;
+    if (mine.bugId) await updateBugs((l) => l.map((b) => (b.id === mine.bugId ? { ...b, status: 'ready', report, error: null, retryAt: 0 } : b)));
+    if (st === mine) {
+      if (mine.view === 'history' || mine.view === 'bugs') mine.back = 'review'; else mine.view = 'review';
+      saveDraft(); render(); $('#main').scrollTop = 0;
+    } else if (!mine.bugId) {
+      // the tester opened something else meanwhile: keep this report in the Bug list instead of losing it
+      await addBug({ id: uid(), at: Date.now(), status: 'ready', report, snap: { shots: mine.shots, videos: mine.videos, page: mine.page, note: mine.note, steps: mine.steps } });
+      toast('The report you were writing is in the Bug list.', 3200);
+    }
   } catch (e) {
-    st.writing = null;
-    st.view = 'capture';
-    if (e.kind !== 'cancelled') showError(e);
-    render();
+    mine.writing = null;
+    if (mine.view === 'writing') mine.view = 'capture'; else mine.back = 'capture';
+    if (st === mine) { if (e.kind !== 'cancelled') showError(e); render(); }
+  } finally {
+    writingNow = false;
+    if (ctrl === myCtrl) ctrl = null;
   }
 }
 function setPhase(n) { if (st.writing) { st.writing.phase = n; if (st.view === 'writing') render(); } }
@@ -227,19 +259,21 @@ function showError(e) {
 }
 async function rewrite(id) {
   if (st.busy) return;
-  st.busy = 'rewrite:' + id; render();
+  const mine = st, report = st.report;
+  mine.busy = 'rewrite:' + id; render();
   try {
-    const images = await aiImages();
-    const { system, text } = rewritePrompt(S, cap(), st.report, id);
+    const images = await aiImages(mine);
+    const { system, text } = rewritePrompt(S, capOf(mine), report, id);
     const { text: out } = await generateAuto(S.ai, { system, text, images, json: true, maxTokens: 1500, kind: 'rewrite' }, undefined, await quotaOpts());
-    const sec = st.report.sections.find((s) => s.id === id);
-    const t = rewriteResult(parseJson(out), sec.layout);
+    const sec = report.sections.find((s) => s.id === id);
+    const t = sec && rewriteResult(parseJson(out), sec.layout);
     if (t) sec.text = t;
-    saveDraft();
+    if (st === mine) saveDraft();
   } catch (e) {
     const d = describeError(e); toast(`${d.title}. ${e.kind === 'ratelimit' ? 'Try again in a moment.' : ''}`, 3500);
   }
-  st.busy = null; render();
+  mine.busy = null;
+  if (st === mine) render();
 }
 function blankReport() {
   const rule = st.page ? locate(st.page, S.urlRules) : {};
@@ -258,38 +292,48 @@ async function fillZoho() {
     st.zoho = { kind: 'notzoho', zohoTabId: z ? z.id : null, active: tab ? tab.title : '' };
     render(); return;
   }
-  st.busy = 'fill'; st.zoho = null; render();
-  const report = st.report;
+  const mine = st, report = st.report;
+  mine.busy = 'fill'; mine.zoho = null; render();
   const labels = (s) => String(s || '').split('|').map((x) => x.trim()).filter(Boolean);
-  const payload = {
-    title: { labels: labels(S.zoho.titleLabel), value: buildTitle(report, S) },
-    description: { labels: labels(S.zoho.descriptionLabel), html: descriptionHtml(report), text: descriptionText(report), sections: report.sections.filter((s) => s.text.trim()).length },
-    fields: S.fields.map((f) => ({ name: f.name, labels: labels(f.zohoLabel || f.name), value: report.fields[f.id] || '' })),
-    tags: { labels: labels(S.zoho.tagsLabel), values: S.zoho.fillTags ? report.tags.filter((t) => t.on).map((t) => t.name) : [] },
-    attachments: { labels: labels(S.zoho.attachLabel), files: [...st.shots.map((s) => ({ name: s.name, dataUrl: s.dataUrl })), ...(await videoFiles())] },
-    steps: { enabled: !!S.zoho.stepsField, labels: labels(S.zoho.stepsLabel || 'Steps to Reproduce'), text: stepsText(report) },
-    options: { looseMatch: S.zoho.looseMatch, scrollToFirst: S.zoho.scrollToFirst, emptyOnly: S.zoho.emptyOnly, uploadScreenshots: S.zoho.uploadScreenshots }
-  };
   try {
+    const { files: videos, skipped } = S.zoho.uploadScreenshots ? await videoFiles(mine) : { files: [], skipped: [] };
+    const payload = {
+      title: { labels: labels(S.zoho.titleLabel), value: buildTitle(report, S) },
+      description: { labels: labels(S.zoho.descriptionLabel), html: descriptionHtml(report), text: descriptionText(report), sections: report.sections.filter((s) => s.text.trim()).length },
+      fields: S.fields.map((f) => ({ name: f.name, labels: labels(f.zohoLabel || f.name), value: report.fields[f.id] || '' })),
+      tags: { labels: labels(S.zoho.tagsLabel), values: S.zoho.fillTags ? report.tags.filter((t) => t.on).map((t) => t.name) : [] },
+      attachments: { labels: labels(S.zoho.attachLabel), files: S.zoho.uploadScreenshots ? [...mine.shots.map((s) => ({ name: s.name, dataUrl: s.dataUrl })), ...videos] : [] },
+      steps: { enabled: !!S.zoho.stepsField, labels: labels(S.zoho.stepsLabel || 'Steps to Reproduce'), text: stepsText(report) },
+      options: { looseMatch: S.zoho.looseMatch, scrollToFirst: S.zoho.scrollToFirst, emptyOnly: S.zoho.emptyOnly, uploadScreenshots: S.zoho.uploadScreenshots }
+    };
     await chrome.scripting.executeScript({ target: { tabId: tab.id, allFrames: true }, files: ['content/zoho-fill.js'] });
-    const res = await chrome.scripting.executeScript({
+    // find the one frame that holds the form, and fill only that one
+    const probes = await chrome.scripting.executeScript({
       target: { tabId: tab.id, allFrames: true },
+      func: (l) => (window.__qaratorProbe ? window.__qaratorProbe(l) : 0),
+      args: [payload.title.labels]
+    });
+    const best = probes.filter((r) => r.result > 0).sort((a, b) => b.result - a.result || a.frameId - b.frameId)[0];
+    if (!best) { mine.busy = null; mine.zoho = { kind: 'noform' }; if (st === mine) render(); return; }
+    const [res] = await chrome.scripting.executeScript({
+      target: { tabId: tab.id, frameIds: [best.frameId] },
       func: (p) => (window.__qaratorFill ? window.__qaratorFill(p) : { ok: false, reason: 'noscript' }),
       args: [payload]
     });
-    const good = res.map((r) => r.result).filter((r) => r && r.ok).sort((a, b) => b.results.filter((x) => x.status === 'filled').length - a.results.filter((x) => x.status === 'filled').length);
-    st.busy = null;
-    if (!good.length) { st.zoho = { kind: 'noform' }; render(); return; }
-    st.fill = { results: good[0].results, tabId: tab.id, at: Date.now() };
-    st.view = 'filled';
-    await saveHistory('Filled in Zoho');
-    if (st.bugId) await patchBug(st.bugId, { status: 'filled', report: st.report, filledAt: Date.now() });
-    await learn();
-    saveDraft(); render(); $('#main').scrollTop = 0;
+    mine.busy = null;
+    const out = res && res.result;
+    if (!out || !out.ok) { mine.zoho = { kind: 'noform' }; if (st === mine) render(); return; }
+    for (const v of skipped) out.results.push({ field: 'Attachments', status: 'check', value: v.name, reason: `This video is ${fmtSize(v.size)}, too big to attach automatically. Use Save files and attach it in Zoho.` });
+    mine.fill = { results: out.results, tabId: tab.id, frameId: best.frameId, at: Date.now() };
+    mine.view = 'filled';
+    await saveHistory('Filled in Zoho', mine);
+    if (mine.bugId) await patchBug(mine.bugId, { status: 'filled', report, filledAt: Date.now() });
+    await learn(mine);
+    if (st === mine) { saveDraft(); render(); $('#main').scrollTop = 0; }
   } catch (e) {
-    st.busy = null;
-    st.zoho = { kind: 'blocked', detail: String(e.message || e) };
-    render();
+    mine.busy = null;
+    mine.zoho = { kind: 'blocked', detail: String(e.message || e) };
+    if (st === mine) render();
   }
 }
 async function gotoField(name) {
@@ -313,7 +357,9 @@ async function useZohoOptions(name) {
   const res = st.fill && st.fill.results.find((r) => r.field === name && r.options);
   const f = S.fields.find((x) => x.name === name);
   if (!res || !f) return;
-  f.options = [...res.options];
+  // keep the "leave it empty" choices the team uses, which Zoho does not list as options
+  const keep = f.options.filter((o) => /^(unassigned|none)$/i.test(o) && !res.options.some((z) => z.toLowerCase() === o.toLowerCase()));
+  f.options = [...keep, ...res.options];
   if (!f.options.includes(f.default)) f.default = f.options[0];
   await saveSettings(S);
   if (st.report && !f.options.includes(st.report.fields[f.id])) { st.report.fields[f.id] = f.default; st.report.aiChosen[f.id] = false; }
@@ -333,49 +379,99 @@ async function refreshBugCounts() {
   $('#btn-bugs').title = bugCounts.all ? `Bug list · ${bugCounts.ready} ready${bugCounts.busy ? `, ${bugCounts.busy} being written` : ''}` : 'Bug list';
 }
 // Save the current bug to the Bug list, have the AI write it in the background, start the next one.
+let savingLater = false;
 async function generateLater() {
   if (recording) { toast('Stop the recording first.'); return; }
   if (needNote()) { askForNote(); return; }
-  if (!st.page) await notePage();
-  const snap = { shots: st.shots, videos: st.videos, page: st.page, note: st.note, steps: st.steps };
-  if (st.bugId) await patchBug(st.bugId, { snap, status: 'waiting', report: null, error: null });
-  else await addBug({ id: uid(), at: Date.now(), status: 'waiting', snap });
-  st = fresh(); saveDraft(); render();
+  if (savingLater) return;
+  savingLater = true;
+  try {
+    if (!st.page) await notePage();
+    const snap = { shots: st.shots, videos: st.videos, page: st.page, note: st.note, steps: st.steps };
+    const id = st.bugId;
+    const exists = id && (await loadBugs()).some((b) => b.id === id);
+    if (exists) await updateBugs((l) => l.map((b) => (b.id === id ? { ...b, snap, rev: (b.rev || 0) + 1, status: 'waiting', report: null, error: null, retryAt: 0 } : b)));
+    else await addBug({ id: uid(), at: Date.now(), status: 'waiting', rev: 0, snap });
+    clearTimeout(saveTimer); saveTimer = 0;
+    st = fresh(); writeDraft(); render();
+  } finally { savingLater = false; }
   toast('Saved to the Bug list. The report is being written; capture the next bug.', 3200);
   runQueue();
 }
 // One bug at a time, oldest first, while the panel is open. A bug left "writing" by a closed panel is retried.
-let queueBusy = false;
+// The writer claims a bug with this panel's id and a heartbeat, so a second panel (another window) leaves it
+// alone, and a bug whose panel closed mid-write (no heartbeat for a minute) is taken up again.
+const PANEL_ID = uid();
+const STALE_MS = 30000;
+let queueBusy = false, queueTimer = 0, writingBugId = null;
+// Closing the panel hands the bug it was writing back to the list, so the next panel takes it up at once.
+addEventListener('pagehide', () => {
+  if (!writingBugId) return;
+  const id = writingBugId;
+  chrome.storage.local.get('bugs').then(({ bugs = [] }) => chrome.storage.local.set({ bugs: bugs.map((b) => (b.id === id && b.owner === PANEL_ID && b.status === 'writing' ? { ...b, status: 'waiting' } : b)) })).catch(() => {});
+});
+const isStale = (b, now = Date.now()) => b.status === 'writing' && now - (b.beat || b.startedAt || 0) > STALE_MS;
 async function runQueue() {
   if (queueBusy) return;
   queueBusy = true;
+  clearTimeout(queueTimer);
   try {
     for (;;) {
-      const next = (await loadBugs()).find((b) => b.status === 'waiting');
-      if (!next) break;
-      await patchBug(next.id, { status: 'writing', startedAt: Date.now(), error: null });
+      const now = Date.now();
+      let next = null;
+      await updateBugs((l) => {
+        const out = l.map((b) => (isStale(b, now) ? { ...b, status: 'waiting' } : b));
+        const pick = out.find((b) => b.status === 'waiting' && !(b.retryAt > now));
+        if (!pick) return out;
+        next = { ...pick, status: 'writing', startedAt: now, beat: now, owner: PANEL_ID, error: null };
+        return out.map((b) => (b.id === pick.id ? next : b));
+      });
+      if (!next) {
+        const all = await loadBugs();
+        // retry times of busy-provider bugs, and when a bug another panel was writing goes stale
+        const later = [...all.filter((b) => b.status === 'waiting' && b.retryAt > now).map((b) => b.retryAt),
+          ...all.filter((b) => b.status === 'writing' && b.owner !== PANEL_ID).map((b) => (b.beat || b.startedAt || now) + STALE_MS)];
+        if (later.length) queueTimer = setTimeout(runQueue, Math.min(...later) - now + 500);
+        break;
+      }
+      const id = next.id, rev = next.rev || 0;
+      const mineNow = (b) => b.id === id && b.status === 'writing' && b.owner === PANEL_ID;
+      const beat = setInterval(() => updateBugs((l) => l.map((b) => (mineNow(b) ? { ...b, beat: Date.now() } : b))), 10000);
+      writingBugId = id;
       try {
         const report = await generateFor(next.snap);
-        await patchBug(next.id, { status: 'ready', report, error: null });
+        // edited while being written (new revision): write it again; taken over by the tester: leave it
+        await updateBugs((l) => l.map((b) => (!mineNow(b) ? b : (b.rev || 0) !== rev ? { ...b, status: 'waiting' } : { ...b, status: 'ready', report, error: null, retryAt: 0 })));
       } catch (e) {
         const d = describeError(e);
-        await patchBug(next.id, { status: 'failed', error: { kind: e.kind || 'provider', title: d.title, body: d.body, detail: e.detail || e.message || '' } });
-        if (['nokey', 'nobase', 'auth'].includes(e.kind)) break; // every other bug would fail the same way
-      }
+        const later = ['ratelimit', 'network', 'server'].includes(e.kind);
+        const retryAt = later ? Date.now() + Math.max(30, Math.min(900, e.retryAfter || 60)) * 1000 : 0;
+        await updateBugs((l) => l.map((b) => (!mineNow(b) ? b : { ...b, status: later ? 'waiting' : 'failed', retryAt, error: { kind: e.kind || 'provider', title: d.title, body: d.body, detail: e.detail || e.message || '' } })));
+        if (later) { queueTimer = setTimeout(runQueue, retryAt - Date.now() + 500); break; }
+        if (['nokey', 'nobase', 'auth'].includes(e.kind)) break; // the next bugs would fail the same way; settings changes restart the queue
+      } finally { clearInterval(beat); writingBugId = null; }
     }
   } finally { queueBusy = false; }
 }
 async function openBug(id) {
   const b = (await loadBugs()).find((x) => x.id === id);
-  if (!b || b.status === 'writing') return;
+  if (!b || (b.status === 'writing' && !isStale(b))) return;
   st = { ...fresh(), ...b.snap, videos: b.snap.videos || [], report: b.report || null, bugId: b.id, view: b.report ? 'review' : 'capture',
     error: b.status === 'failed' && b.error ? { ...b.error, retryAt: 0 } : null };
+  lastSnapSig = snapSig(st);
   saveDraft(); render(); $('#main').scrollTop = 0;
 }
-// Edits to an opened bug go back to its entry in the list.
+// Edits to an opened bug go back to its entry in the list. A changed capture is a new revision, so a write
+// already running for the old one is not taken as the answer; a report is never replaced with nothing.
+const snapSig = (s) => JSON.stringify([s.note, s.steps, s.shots.map((x) => `${x.id}:${(x.marks || []).length}:${x.dataUrl.length}`), (s.videos || []).map((v) => v.id), s.page && s.page.url]);
+let lastSnapSig = '';
 function syncBug() {
   if (!st.bugId) return;
-  patchBug(st.bugId, { snap: { shots: st.shots, videos: st.videos, page: st.page, note: st.note, steps: st.steps }, report: st.report });
+  const sig = snapSig(st), changed = sig !== lastSnapSig;
+  lastSnapSig = sig;
+  const id = st.bugId, report = st.report, snap = { shots: st.shots, videos: st.videos, page: st.page, note: st.note, steps: st.steps };
+  if (!changed && !report) return;
+  updateBugs((l) => l.map((b) => (b.id !== id ? b : { ...b, ...(changed ? { snap, rev: (b.rev || 0) + 1 } : {}), ...(report ? { report } : {}) })));
 }
 async function keepVideoIds() {
   const media = await allMedia().catch(() => []);
@@ -385,27 +481,35 @@ async function keepVideoIds() {
 async function pruneUnused() { pruneVideos(await keepVideoIds()); }
 const bugSel = new Set();
 
-async function videoFiles() {
-  const out = [];
-  for (const v of st.videos || []) {
+const MAX_ATTACH = 25 * 1024 * 1024;
+async function videoFiles(s = st) {
+  const files = [], skipped = [];
+  for (const v of s.videos || []) {
     const blob = await getVideo(v.id).catch(() => null);
-    if (blob) out.push({ name: v.name, dataUrl: await blobToDataUrl(blob) });
+    if (!blob) continue;
+    if (blob.size > MAX_ATTACH) { skipped.push({ name: v.name, size: blob.size }); continue; }
+    files.push({ name: v.name, dataUrl: await blobToDataUrl(blob) });
   }
-  return out;
+  return { files, skipped };
 }
 
 // Remember portal / module / page for this page, so the next bug here starts with the same names.
-async function learn() {
-  if (!st.report || !st.page || !st.page.url) return;
-  const next = learnRule(S.urlRules, st.page.url, st.report.segments);
+async function learn(s = st) {
+  if (!s.report || !s.page || !s.page.url) return;
+  const next = learnRule(S.urlRules, s.page.url, s.report.segments);
   if (next) { S.urlRules = next; await saveSettings(S); }
 }
 const tagSuggestions = () => (st.report ? suggestTags(st.report, S.tags.list, S.tags.max || 5) : []);
 
 // One download: the Word file, or a zip with the Word file and its videos.
 async function download(docx, base, videos) {
-  const files = [];
-  for (const v of videos || []) { const blob = await getVideo(v.id).catch(() => null); if (blob) files.push({ name: v.name, blob }); }
+  const files = [], seen = new Set();
+  for (const v of videos || []) {
+    if (seen.has(v.id)) continue;
+    seen.add(v.id);
+    const blob = await getVideo(v.id).catch(() => null);
+    if (blob) files.push({ name: files.some((f) => f.name === v.name) ? v.name.replace(/(\.\w+)$/, `_${files.length}$1`) : v.name, blob });
+  }
   const out = await bundle(docx, base, files);
   const url = URL.createObjectURL(out.blob);
   downloadDataUrl(url, out.name);
@@ -454,8 +558,14 @@ async function stopRec() {
   recording = null;
   if (!out.blob.size) { toast('The recording was empty.'); render(); return; }
   const id = uid();
-  await putVideo(id, out.blob);
-  st.videos.push({ id, name: `qarator_${stamp()}_rec${st.videos.length + 1}.${extFor(out.mime)}`, mime: out.mime, size: out.blob.size, ms: out.ms, dur: fmtDur(out.ms), thumb: out.thumb, frames: out.frames });
+  const name = `qarator_${stamp()}_rec${st.videos.length + 1}.${extFor(out.mime)}`;
+  try { await putVideo(id, out.blob); }
+  catch (e) {
+    // could not store it (disk full?): hand the file over rather than lose it
+    const url = URL.createObjectURL(out.blob); downloadDataUrl(url, name); setTimeout(() => URL.revokeObjectURL(url), 10000);
+    toast('The video could not be kept in the panel, so it was saved to Downloads.', 4000); render(); return;
+  }
+  st.videos.push({ id, name, mime: out.mime, size: out.blob.size, ms: out.ms, dur: fmtDur(out.ms), thumb: out.thumb, frames: out.frames });
   if (st.view === 'history' || st.view === 'filled') st.view = 'capture';
   saveDraft(); render();
 }
@@ -481,6 +591,7 @@ async function playVideo(id) {
     <button type="button" class="btn b-sec" id="vclose">Close</button></div>`;
   const close = () => { host.innerHTML = ''; URL.revokeObjectURL(url); };
   $('#vclose').onclick = close;
+  $('#vclose').focus();
   host.querySelector('.vplay').onclick = (e) => { if (e.target.classList.contains('vplay')) close(); };
 }
 const videosHtml = () => (st.videos.length ? `<div><div class="lbl">Videos <span style="font-weight:400;color:var(--ink3)">${st.videos.length}</span></div><div class="shots">${st.videos.map((v, i) => `<div>
@@ -504,7 +615,9 @@ function setProj() { $('#proj').textContent = portalLabel(); }
 
 function render() {
   setProj();
+  if (st.view === 'writing' && !writingNow) st.view = 'capture';
   renderFlow();
+  $('#recbar').innerHTML = recBar();
   startRecTimer();
   main.className = '';
   const v = st.view;
@@ -612,7 +725,6 @@ function whereHtml() {
 function renderCaptured() {
   const n = st.shots.length;
   main.innerHTML = `
-  ${recBar()}
   ${errorBanner()}
   <div>
     <div class="lbl between" style="margin-bottom:8px;flex-wrap:wrap"><span>Screenshots <span style="font-weight:400;color:var(--ink3)">${n}</span></span>
@@ -838,6 +950,7 @@ function renderFilled() {
 
 async function renderBugs() {
   const list = await loadBugs();
+  if (st.view !== 'bugs') return; // the tester moved on while this loaded
   for (const id of [...bugSel]) if (!list.some((b) => b.id === id)) bugSel.delete(id);
   const when = (ts) => new Date(ts).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
   const titleOf = (b) => (b.report ? buildTitle(b.report, S) : bugNote(b));
@@ -855,6 +968,7 @@ async function renderBugs() {
       <div style="flex:1;min-width:0"><div class="t">${esc(titleOf(b))}</div>
         <div class="hint" style="margin-top:3px;display:flex;flex-wrap:wrap;gap:4px 8px;align-items:center"><span class="st ${b.status}">${b.status === 'writing' ? orb('working', 20) : ''}${STATUS[b.status] || b.status}</span>${when(b.at)}</div>
         ${b.status === 'failed' && b.error ? `<div class="hint" style="margin-top:3px;color:var(--acc-text)">${esc(b.error.title)}</div>` : ''}
+        ${b.status === 'waiting' && b.error && b.retryAt ? `<div class="hint" style="margin-top:3px;color:var(--acc-text)">${esc(b.error.title)}. Next try at ${fmtTime(b.retryAt)}.</div>` : ''}
         <div style="display:flex;gap:4px;margin:6px 0 0 -8px;flex-wrap:wrap">
           <button type="button" class="btn b-sec b-sm" data-action="bug-open" data-id="${b.id}" ${b.status === 'writing' ? 'disabled' : ''}>${b.status === 'ready' || b.status === 'filled' ? 'Open report' : 'Open'}</button>
           ${b.status === 'failed' ? `<button type="button" class="btn b-ghost b-sm" data-action="bug-retry" data-id="${b.id}">Try again</button>` : ''}
@@ -874,14 +988,17 @@ const bugsDock = () => {
 async function exportBugList(full) {
   const list = (await loadBugs()).filter((b) => bugSel.has(b.id));
   if (!list.length) return;
-  await download(await exportBugs(list, S, { full }), `qarator_${full ? 'bugs' : 'notes'}_${stamp()}`, list.flatMap((b) => b.snap.videos || []));
-  toast(`${list.length} bug${list.length === 1 ? '' : 's'} saved to Downloads`);
+  try {
+    await download(await exportBugs(list, S, { full }), `qarator_${full ? 'bugs' : 'notes'}_${stamp()}`, list.flatMap((b) => b.snap.videos || []));
+    toast(`${list.length} bug${list.length === 1 ? '' : 's'} saved to Downloads`);
+  } catch (e) { toast(`Export failed: ${e.message || e}`, 4000); }
 }
 
 // Ticked reports in Recent reports, for "Export to Word". Not saved: it starts empty each time.
 const histSel = new Set();
 async function renderHistory() {
   const list = await history();
+  if (st.view !== 'history') return;
   for (const id of [...histSel]) if (!list.some((h) => String(h.id) === id)) histSel.delete(id);
   main.innerHTML = `
   <div style="display:flex;align-items:center;justify-content:space-between;margin:-8px">
@@ -902,10 +1019,12 @@ const histDock = () => `<button type="button" class="btn b-pri wide" data-action
 async function exportHistory() {
   const list = (await history()).filter((h) => histSel.has(String(h.id)));
   if (!list.length) return;
-  for (const h of list) h.media = (await getMedia(h.id).catch(() => null)) || {};
-  const docx = await exportReports(list, S);
-  await download(docx, `qarator_reports_${stamp()}`, list.flatMap((h) => h.media.videos || []));
-  toast(`${list.length} report${list.length === 1 ? '' : 's'} saved to Downloads`);
+  try {
+    for (const h of list) h.media = (await getMedia(h.id).catch(() => null)) || {};
+    const docx = await exportReports(list, S);
+    await download(docx, `qarator_reports_${stamp()}`, list.flatMap((h) => h.media.videos || []));
+    toast(`${list.length} report${list.length === 1 ? '' : 's'} saved to Downloads`);
+  } catch (e) { toast(`Export failed: ${e.message || e}`, 4000); }
 }
 
 // ---------- events ----------
@@ -924,11 +1043,16 @@ document.addEventListener('click', async (e) => {
     case 'toggle-steps': st.stepsOpen = !st.stepsOpen; render(); if (st.stepsOpen) $('#steps')?.focus(); return;
     case 'remove': st.shots = st.shots.filter((s) => s.id !== id); saveDraft(); return render();
     case 'markup': {
+      if (markupOpening || $('#overlay').firstChild) return;
       const i = st.shots.findIndex((s) => s.id === id);
       const shot = st.shots[i];
-      return openMarkup(shot, i, st.shots.length, {
-        onApply: async ({ dataUrl, marks, original }) => { Object.assign(shot, { dataUrl, marks, original, thumb: await thumb(dataUrl) }); saveDraft(); render(); }
-      });
+      if (!shot) return;
+      markupOpening = true;
+      try {
+        return await openMarkup(shot, i, st.shots.length, {
+          onApply: async ({ dataUrl, marks, original }) => { Object.assign(shot, { dataUrl, marks, original, thumb: await thumb(dataUrl) }); saveDraft(); render(); }
+        });
+      } finally { markupOpening = false; }
     }
     case 'write': return write();
     case 'export-word': return needNote() && !st.report ? askForNote() : exportWord();
@@ -939,7 +1063,7 @@ document.addEventListener('click', async (e) => {
     case 'bug-remove': if (!confirm('Remove this bug from the list?')) return; await removeBugs([id]); bugSel.delete(id); if (st.bugId === id) st.bugId = null; pruneUnused(); return;
     case 'bugs-export-full': return exportBugList(true);
     case 'bugs-export-notes': return exportBugList(false);
-    case 'bugs-clear-filled': { const ids = (await loadBugs()).filter((b) => b.status === 'filled').map((b) => b.id); await removeBugs(ids); ids.forEach((x) => bugSel.delete(x)); pruneUnused(); return; }
+    case 'bugs-clear-filled': { const ids = (await loadBugs()).filter((b) => b.status === 'filled').map((b) => b.id); await removeBugs(ids); ids.forEach((x) => bugSel.delete(x)); if (ids.includes(st.bugId)) st.bugId = null; pruneUnused(); return; }
     case 'next-ready': { const b = (await loadBugs()).find((x) => x.status === 'ready'); if (b) return openBug(b.id); return; }
     case 'use-zoho-options': return useZohoOptions(b.dataset.name);
     case 'record-screen': return startRec('screen');
@@ -968,7 +1092,7 @@ document.addEventListener('click', async (e) => {
     case 'open-zoho': return openZoho();
     case 'goto': return gotoField(b.dataset.name);
     case 'next': st = fresh(); saveDraft(); pruneUnused(); return render();
-    case 'history': st.back = st.view === 'history' ? st.back : st.view; st.view = 'history'; return render();
+    case 'history': st.back = st.view === 'history' || st.view === 'bugs' ? st.back : st.view; st.view = 'history'; return render();
     case 'history-back': st.view = st.back || 'capture'; return render();
     case 'bugs-back': st.view = st.back || 'capture'; return render();
     case 'history-clear': { for (const h of await history()) deleteMedia(h.id).catch(() => {}); await chrome.storage.local.set({ history: [] }); histSel.clear(); pruneUnused(); return render(); }
@@ -1023,7 +1147,7 @@ document.addEventListener('change', (e) => {
   }
 });
 document.addEventListener('keydown', (e) => {
-  if ($('#overlay').firstChild) return; // markup editor handles its own keys
+  if ($('#overlay').firstChild) { if (e.key === 'Escape' && $('#vclose')) $('#vclose').click(); return; } // markup editor handles its own keys
   if (e.target.id === 'new-tag' && e.key === 'Enter') {
     e.preventDefault();
     // a tag from the team list keeps its exact spelling; anything else is lowercased like AI tags
@@ -1063,7 +1187,7 @@ chrome.tabs.onActivated.addListener(async ({ tabId }) => {
 });
 chrome.runtime.onMessage.addListener((msg) => {
   if (msg && msg.type === 'qarator:capture') { chrome.storage.session.remove('pendingCapture').catch(() => {}); captureTab(); }
-  if (msg && msg.type === 'qarator:record') { if (recording) stopRec(); else startRec('screen'); }
+  if (msg && msg.type === 'qarator:record') { chrome.storage.session.remove('pendingRecord').catch(() => {}); if (recording) stopRec(); else startRec('screen'); }
 });
 
 // ---------- start ----------
@@ -1080,6 +1204,7 @@ chrome.runtime.onMessage.addListener((msg) => {
     if (st.error && (st.error.kind === 'nokey' || st.error.kind === 'nobase') && (S.ai.apiKey || S.ai.provider === 'compatible')) st.error = null;
     if (st.view !== 'writing') render();
     refreshQuota();
+    runQueue(); // a key added or changed may unblock waiting bugs
   });
   env = await detectEnv();
   await loadDraft();
@@ -1093,11 +1218,13 @@ chrome.runtime.onMessage.addListener((msg) => {
     if (c.bugs) { refreshBugCounts(); if (st.view === 'bugs') render(); }
   });
   // a bug left "writing" when the panel closed goes back to waiting, then the queue carries on
-  await updateBugs((list) => list.map((b) => (b.status === 'writing' ? { ...b, status: 'waiting' } : b)));
+  // bugs left "writing" by a panel that closed are picked up by runQueue once their heartbeat is a minute old
   refreshBugCounts();
   runQueue();
   try {
     const { pendingCapture } = await chrome.storage.session.get('pendingCapture');
     if (pendingCapture && Date.now() - pendingCapture < 5000) { await chrome.storage.session.remove('pendingCapture'); captureTab(); }
+    const { pendingRecord } = await chrome.storage.session.get('pendingRecord');
+    if (pendingRecord && Date.now() - pendingRecord < 5000) { await chrome.storage.session.remove('pendingRecord'); startRec('screen'); }
   } catch (e) { /* ignore */ }
 })();

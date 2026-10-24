@@ -352,7 +352,7 @@ try:
             check("auto: tries flash first, falls back to pro on daily quota", tried == ["gemini-2.5-flash", "gemini-2.5-pro"], str(tried))
             check("auto: review says which model wrote it", any("Written by gemini-2.5-pro" in h for h in hdr), str(hdr))
             st = sw.evaluate("async () => chrome.storage.local.get(['modelCooldown', 'learnedLimits', 'usage'])")
-            until = st.get("modelCooldown", {}).get("gemini-2.5-flash", 0)
+            until = max([u for k, u in st.get("modelCooldown", {}).items() if k.startswith("gemini-2.5-flash@main:")] or [0])
             check("auto: flash rests until the daily reset (> 1 h)", until - time.time() * 1000 > 3600000, str(until))
             check("auto: daily limit learned from the 429", st.get("learnedLimits", {}).get("gemini-2.5-flash") == 20, str(st.get("learnedLimits")))
             n1 = len(seen["gemini"])
@@ -401,7 +401,7 @@ try:
             tried = [(r["url"].split("models/")[1].split(":")[0], r["headers"].get("x-goog-api-key")) for r in seen["gemini"][n0:]]
             check("backup key: same model retried on the backup key before other models", tried == [("gemini-2.5-flash", "test-gemini-key"), ("gemini-2.5-flash", "backup-gemini-key")], str(tried))
             cool = sw.evaluate("async () => (await chrome.storage.local.get('modelCooldown')).modelCooldown || {}")
-            check("backup key: only the main key's slot rests", "gemini-2.5-flash" in cool and "gemini-2.5-flash@backup" not in cool, str(list(cool)))
+            check("backup key: only the main key's slot rests", any(k.startswith("gemini-2.5-flash@main:") for k in cool) and not any(k.startswith("gemini-2.5-flash@backup:") for k in cool), str(list(cool)))
             n1 = len(seen["gemini"])
             to_capture(); panel.wait_for_timeout(500)
             q = panel.inner_text("#dock")

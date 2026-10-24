@@ -24,8 +24,11 @@ async function syncErrorHook() {
     await chrome.scripting.unregisterContentScripts({ ids: [ERR_ID] });
   }
 }
-syncErrorHook().catch(() => {});
-chrome.storage.onChanged.addListener((c, area) => { if (area === 'local' && c.settings) syncErrorHook().catch(() => {}); });
+// settings autosave often: run one sync at a time so a quick on/off cannot leave the hook registered
+let hookChain = Promise.resolve();
+const queueHookSync = () => { hookChain = hookChain.then(syncErrorHook).catch(() => {}); };
+queueHookSync();
+chrome.storage.onChanged.addListener((c, area) => { if (area === 'local' && c.settings) queueHookSync(); });
 enablePanelOnClick();
 
 chrome.commands.onCommand.addListener((command, tab) => {
@@ -34,7 +37,11 @@ chrome.commands.onCommand.addListener((command, tab) => {
   if (tab && tab.windowId !== undefined) {
     chrome.sidePanel.open({ windowId: tab.windowId }).catch(() => {});
   }
-  if (command === 'record') chrome.runtime.sendMessage({ type: 'qarator:record' }).catch(() => {});
+  if (command === 'record') {
+    // like capture: a panel that is still opening picks this up on start
+    chrome.storage.session.set({ pendingRecord: Date.now() }).catch(() => {});
+    chrome.runtime.sendMessage({ type: 'qarator:record' }).catch(() => {});
+  }
   if (command === 'capture') {
     // If the panel is already open it captures right away; if it is still
     // loading it picks this flag up on start.

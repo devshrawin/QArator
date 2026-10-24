@@ -38,4 +38,5 @@ globalThis.__qaratorHints = globalThis.__qaratorHints || (() => {
     heading: headEl ? clean(headEl.innerText).slice(0, 80) : ''
   };
 });
-globalThis.__qaratorHints();
+// loaded at document_start as a content script there is nothing to read yet; injected later it returns the hints
+document.readyState === 'loading' ? null : globalThis.__qaratorHints();

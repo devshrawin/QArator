@@ -12,7 +12,8 @@
     try {
       if (v instanceof Error) return `${v.name}: ${v.message}`;
       if (typeof v === 'string') return v;
-      if (v && typeof v === 'object') return JSON.stringify(v).slice(0, 300);
+      // never walk a large page object: name and a few keys are enough for a bug report
+      if (v && typeof v === 'object') return `${(v.constructor && v.constructor.name) || 'Object'} {${Object.keys(v).slice(0, 8).join(', ')}}`;
       return String(v);
     } catch (x) { return String(v); }
   };

@@ -1,6 +1,6 @@
 // QArator settings page. Edits a copy of the settings and autosaves.
 import { loadSettings, saveSettings, normalize, exportFormat, importFormat, DEFAULTS, PROVIDERS, LAYOUTS, SEGMENTS, APPEARANCE, slug } from '../lib/settings.js';
-import { listModels, describeError, rankModels, cooldowns, AUTO } from '../lib/ai.js';
+import { listModels, describeError, rankModels, cooldowns, parseSlot, AUTO } from '../lib/ai.js';
 import { summarize, parsePrices, rowCost, rupees, nextQuotaReset, istClock, usedToday, limitFor, parseLimits } from '../lib/usage.js';
 import { buildTitle } from '../lib/report.js';
 import { esc, icon, beam, orb, markSvg, applyTheme, applyAppearance, watchTheme, toast, fmtTime } from '../lib/ui.js';
@@ -96,8 +96,8 @@ function secUsage() {
       const pct = Math.round((remaining / lim.limit) * 100);
       left = `<div class="meter" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}" aria-label="${esc(r.model)} left today"><i class="${pct === 0 ? 's' : pct <= 20 ? 'q' : ''}" style="width:${pct}%"></i></div><div class="hint">${lim.source === 'assumed' ? '~' : ''}${remaining} of ${lim.source === 'assumed' ? '~' : ''}${lim.limit} left${lim.source === 'assumed' ? ' (assumed free-tier limit)' : ''}</div>`;
     }
-    const slot = r.key === 'backup' ? `${r.model}@backup` : r.model;
-    if (U.cool[slot]) left += `<div class="hint" style="color:var(--acc-text)">Resting until ${istClock(U.cool[slot])}</div>`;
+    const rest = Object.entries(U.cool).filter(([slot]) => { const p = parseSlot(slot); return p.model === r.model && p.tag === r.key; }).map(([, u]) => u);
+    if (rest.length) left += `<div class="hint" style="color:var(--acc-text)">Resting until ${istClock(Math.max(...rest))}</div>`;
     return `<tr><td><strong style="font-weight:600">${esc(r.model)}</strong><div class="hint">${esc(r.provider)}${r.key === 'backup' ? ' · backup key' : ''}</div></td><td>${KIND[r.kind] || esc(r.kind)}</td>
       <td class="num">${r.req}</td><td class="num">${r.fail ? `${r.fail}${r.rl ? ` (${r.rl} limit)` : ''}` : '0'}</td>
       <td class="num">${r.tin || r.tout ? `${fmtN(r.tin)} / ${fmtN(r.tout)}` : '–'}</td>
@@ -285,9 +285,15 @@ function secShare() {
 
 function render() {
   const y = scrollY;
+  const a = document.activeElement;
+  const keep = a && a.id && main.contains(a) ? { id: a.id, s: a.selectionStart, e: a.selectionEnd } : null;
   main.innerHTML = secAI() + secLength() + secTitle() + secSections() + secFields() + secTags() + secStyle() + secZoho() + secUsage() + secAppearance() + secShare();
   applyTheme();
   scrollTo(0, y);
+  if (keep) {
+    const el = document.getElementById(keep.id);
+    if (el) { el.focus({ preventScroll: true }); try { if (keep.s != null) el.setSelectionRange(keep.s, keep.e); } catch (e) { /* not a text field */ } }
+  }
 }
 
 // ---------- events ----------
@@ -431,7 +437,11 @@ addEventListener('scroll', navSpy, { passive: true });
   render();
   navSpy();
   chrome.storage.onChanged.addListener(async (c, area) => {
-    if (area === 'local' && (c.usage || c.learnedLimits || c.modelCooldown)) { await loadUsage(); render(); }
+    if (area === 'local' && (c.usage || c.learnedLimits || c.modelCooldown)) {
+      await loadUsage();
+      const old = document.getElementById('usage');
+      if (old && !old.contains(document.activeElement)) { old.outerHTML = secUsage(); applyTheme(); } else if (!old) render();
+    }
     if (area === 'local' && c.settings) applyAppearance(normalize(c.settings.newValue));
   });
   watchTheme();

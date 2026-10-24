@@ -77,6 +77,26 @@
     return null;
   }
 
+  // Rows of a dropdown that are real options (not the loader or a "No results" line).
+  const optionRows = (box) => [...(box?.querySelectorAll('li') || [])].filter((li) => !/loader|noresult|no-result/i.test(li.className) && visible(li) && li.innerText.trim() && !/^(no (results|matches) found|loading)/i.test(li.innerText.trim()));
+  // Scroll a lazily loaded list until no new rows come in. complete: the end was reached, so the list is whole.
+  async function readWholeList(list, items, find) {
+    let seen = [...new Set(items().map((li) => li.innerText.trim()))], hit = null, complete = false;
+    for (let round = 0; round < 15; round++) {
+      const body = list()?.querySelector('.zdropdownlist__body, ul');
+      if (!body) { complete = seen.length < 10; break; }
+      const before = seen.length;
+      body.scrollTop = body.scrollHeight;
+      body.dispatchEvent(new Event('scroll', { bubbles: true }));
+      await sleep(350);
+      hit = hit || find();
+      seen = [...new Set([...seen, ...items().map((li) => li.innerText.trim())])];
+      if (seen.length === before) { complete = true; break; }
+      if (hit) break;
+    }
+    return { hit, seen: seen.slice(0, 200), complete };
+  }
+
   // Zoho dropdown: open it, find the item in its own listbox (aria-owns), use the search box if needed.
   async function pickZoho(box, value, looseMatch) {
     const host = box.closest('ruc-select') || box.parentElement;
@@ -85,24 +105,15 @@
     if (same(shown(), value)) return { ok: true };
     const listId = box.getAttribute('aria-owns');
     const list = () => (listId && document.getElementById(listId)) || host.querySelector('.zdropdownlist');
-    const items = () => [...(list()?.querySelectorAll('li') || [])].filter((li) => !/loader/.test(li.className) && visible(li) && li.innerText.trim());
+    const items = () => optionRows(list());
     const find = () => items().find((li) => same(li.innerText, value));
     box.scrollIntoView({ block: 'center' });
     click(box); box.focus();
     let hit = await waitFor(find, 1500);
     // Zoho shows the first 10 options and loads the rest as the list scrolls: scroll until nothing new arrives.
-    let seenAll = [...new Set(items().map((li) => li.innerText.trim()))];
-    for (let round = 0; !hit && round < 12; round++) {
-      const body = list()?.querySelector('.zdropdownlist__body, ul');
-      if (!body) break;
-      const before = items().length;
-      body.scrollTop = body.scrollHeight;
-      body.dispatchEvent(new Event('scroll', { bubbles: true }));
-      await sleep(350);
-      hit = await waitFor(find, 400);
-      seenAll = [...new Set([...seenAll, ...items().map((li) => li.innerText.trim())])];
-      if (!hit && items().length === before) break;
-    }
+    const read = await readWholeList(list, items, find);
+    hit = hit || read.hit;
+    const seenAll = read.seen, complete = read.complete;
     if (!hit) {
       const search = list()?.querySelector('input.zdropdownlist__searchfield, input[type=text]');
       if (search) {
@@ -112,9 +123,8 @@
       }
     }
     if (!hit) {
-      const seen = seenAll.slice(0, 20);
       document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', keyCode: 27, bubbles: true }));
-      return { ok: false, options: seen, all: true };
+      return { ok: false, options: seenAll, all: complete && seenAll.length > 0 };
     }
     hit.scrollIntoView({ block: 'nearest' });
     hit.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
@@ -131,33 +141,24 @@
     if (tokenText().some((t) => same(t, value))) return { ok: true };
     const menuId = input.getAttribute('aria-owns');
     const menu = () => (menuId && document.getElementById(menuId)) || host.querySelector('.zdropdownlist');
-    const items = () => [...(menu()?.querySelectorAll('li') || [])].filter((li) => !/loader/.test(li.className) && visible(li) && li.innerText.trim());
+    const items = () => optionRows(menu());
     const find = () => items().find((li) => same(li.innerText, value));
     input.scrollIntoView({ block: 'center' });
     click(input); input.focus();
     let hit = await waitFor(find, 1200);
     // read the whole menu first (it loads more as it scrolls), then fall back to typing into the box
-    let seenAll = [...new Set(items().map((li) => li.innerText.trim()))];
-    for (let round = 0; !hit && round < 12; round++) {
-      const body = menu()?.querySelector('.zdropdownlist__body, ul');
-      if (!body) break;
-      const before = items().length;
-      body.scrollTop = body.scrollHeight;
-      body.dispatchEvent(new Event('scroll', { bubbles: true }));
-      await sleep(350);
-      hit = await waitFor(find, 400);
-      seenAll = [...new Set([...seenAll, ...items().map((li) => li.innerText.trim())])];
-      if (!hit && items().length === before) break;
-    }
+    const read = await readWholeList(menu, items, find);
+    hit = hit || read.hit;
+    const seenAll = read.seen, complete = read.complete;
     if (!hit) { setNativeValue(input, value); input.dispatchEvent(new KeyboardEvent('keyup', { key: value.slice(-1) || 'a', bubbles: true })); hit = await waitFor(find, 2500); }
     if (!hit) {
       setNativeValue(input, '');
       input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', keyCode: 27, bubbles: true }));
-      return { ok: false, options: seenAll.slice(0, 20), all: seenAll.length > 0 };
+      return { ok: false, options: seenAll, all: complete && seenAll.length > 0 };
     }
     click(hit);
     await sleep(250);
-    const ok = tokenText().some((t) => same(t, value)) || host.innerText.toLowerCase().includes(value.toLowerCase());
+    const ok = tokenText().some((t) => same(t, value));
     return ok ? { ok: true } : { ok: false, options: [], unsure: true };
   }
 
@@ -167,17 +168,19 @@
     if (!input) return null;
     const holder = input.closest('#addBugTag') || input.parentElement;
     holder.setAttribute('data-qarator-field', 'Tags');
-    const chips = () => (holder.querySelector('.associatedTags')?.innerText || '').toLowerCase();
+    // compare whole tag names: "ui" must not count as present because a chip says "UR - Build"
+    const chipSet = () => new Set([...(holder.querySelector('.associatedTags')?.children || [])].map((c) => loose(c.innerText)).filter(Boolean));
+    const has = (t) => chipSet().has(loose(t));
     const out = []; const failed = [];
     for (const t of tags) {
-      if (chips().includes(t.toLowerCase())) continue;
+      if (has(t)) continue;
       input.focus();
       setNativeValue(input, t);
       input.dispatchEvent(new KeyboardEvent('keyup', { key: t.slice(-1), bubbles: true }));
       const list = () => document.querySelector('[id^="tag_suggestion_list"]');
       const hit = await waitFor(() => [...(list()?.querySelectorAll('*') || [])].find((el) => el.children.length === 0 && visible(el) && loose(el.innerText) === loose(t)), 2500);
       if (hit) { click(hit.closest('li, [class*="tag"], div') || hit); await sleep(350); }
-      if (!chips().includes(t.toLowerCase())) { failed.push(t); setNativeValue(input, ''); }
+      if (!has(t)) { failed.push(t); setNativeValue(input, ''); }
     }
     const ok = tags.length - failed.length;
     if (ok) out.push({ field: 'Tags', status: 'filled', value: `${ok} of ${tags.length} added` });
@@ -270,9 +273,9 @@
     // type into a search box if the dropdown opened one
     const active = document.activeElement;
     if (active && active !== c && active.tagName === 'INPUT' && visible(active)) { setNativeValue(active, value); await sleep(400); }
-    let opts = visibleOptions();
-    const fresh = opts.filter((o) => !before.has(o));
-    if (fresh.length) opts = fresh;
+    // only options that appeared when the control opened; never items already on the page (filters, menus)
+    const opts = visibleOptions().filter((o) => !before.has(o));
+    if (!opts.length) return { ok: false, options: [] };
     const want = looseMatch ? loose(value) : value;
     const hit = opts.find((o) => (looseMatch ? loose(o.innerText) : o.innerText.trim()) === want);
     if (hit) { hit.scrollIntoView({ block: 'nearest' }); click(hit); await sleep(200); return { ok: true }; }
@@ -298,17 +301,21 @@
       setNativeValue(c, hit.value);
       return { field: f.name, status: 'filled', value: hit.text.trim() };
     }
-    if (f.kind === 'dropdown' || isDropdown(c)) {
+    // a box that opens a list (token fields, autocompletes) is a dropdown even though it is an <input>
+    const listy = c.classList.contains('ztokenfield__textbox') || c.getAttribute('aria-owns') || c.getAttribute('aria-autocomplete') || c.getAttribute('list') || c.getAttribute('aria-haspopup') || c.getAttribute('role') === 'combobox';
+    const typable = (c.tagName === 'INPUT' && !c.readOnly && !listy) || c.tagName === 'TEXTAREA';
+    if (isDropdown(c) || (f.kind === 'dropdown' && !typable)) {
       const r = c.classList.contains('zselectbox') ? await pickZoho(c, f.value, opt.looseMatch)
         : c.classList.contains('ztokenfield__textbox') ? await pickToken(c, f.value, opt.looseMatch)
         : await pickCustom(c, f.value, opt.looseMatch);
       if (r.unsure) return { field: f.name, status: 'check', value: f.value, reason: `Picked “${f.value}” but Zoho did not confirm it. Check the dropdown.` };
       if (r.ok) return { field: f.name, status: 'filled', value: f.value };
       return { field: f.name, status: 'check', value: f.value, options: r.all ? r.options : undefined,
-        reason: r.options.length ? `“${f.value}” is not in Zoho's list. Zoho offers ${r.options.join(', ')}.` : `Couldn't open the list to pick “${f.value}”. Choose it by hand.` };
+        reason: r.options.length ? `“${f.value}” is not in Zoho's list. Zoho offers ${r.options.slice(0, 20).join(', ')}${r.options.length > 20 ? ` and ${r.options.length - 20} more` : ''}.` : `Couldn't open the list to pick “${f.value}”. Choose it by hand.` };
     }
     const ed = editableOf(c);
     if (ed) return fillRich(c, f) ;
+    if (!typable) return { field: f.name, status: 'check', value: f.value, reason: "This field could not be filled automatically. Set it by hand." };
     setNativeValue(c, f.value);
     return { field: f.name, status: currentValue(c) ? 'filled' : 'check', value: f.value, reason: currentValue(c) ? '' : 'The field did not accept the text. Paste it by hand.' };
   }
@@ -399,7 +406,11 @@
       const scope = anchor.closest('form, [role=dialog], .modal, [class*="dialog"], [class*="popup"]');
       if (scope) input = scope.querySelector('input[type=file]');
     }
-    input = input || all[0];
+    if (!input) {
+      const scope = anchor && anchor.closest('form, [role=dialog], .modal, [class*="dialog"], [class*="popup"], [class*="form"]');
+      input = scope ? scope.querySelector('input[type=file]') : (all.length === 1 ? all[0] : null);
+    }
+    if (!input) return [{ field: 'Attachments', status: 'check', missing: true, value: `${files.length} files`, reason: 'No attachment field found in this form. Use Save files and attach them by hand.' }];
     try {
       const dt = new DataTransfer();
       files.forEach((f) => dt.items.add(dataUrlToFile(f.dataUrl, f.name)));
@@ -433,7 +444,11 @@
   };
 
   /** payload: {title, description, fields, tags, attachments, options} */
+  // How well this frame matches the form: Zoho's own title field counts most. Used to fill only one frame.
+  window.__qaratorProbe = (labels) => (lyteControl(labels, new Set()) ? 3 : findControl(labels, new Set()) ? 1 : 0) + (window === window.top ? 0.5 : 0);
+
   window.__qaratorFill = async (p) => {
+    document.querySelectorAll('[data-qarator-field]').forEach((el) => el.removeAttribute('data-qarator-field'));
     const used = new Set();
     const opt = p.options || {};
     const titleCtrl = findControl(p.title.labels, new Set());
@@ -447,12 +462,13 @@
       used.add(desc); desc.setAttribute('data-qarator-field', 'Description');
       if (opt.emptyOnly && currentValue(desc)) results.push({ field: 'Description', status: 'kept', reason: 'Already had text, left as it was' });
       else if (editableOf(desc)) results.push(fillRich(desc, { name: 'Description', html: p.description.html, sections: p.description.sections }));
-      else { setNativeValue(desc, p.description.text); results.push({ field: 'Description', status: 'filled', value: `${p.description.sections} sections` }); }
+      else if (desc.tagName === 'TEXTAREA' || desc.tagName === 'INPUT') { setNativeValue(desc, p.description.text); results.push({ field: 'Description', status: 'filled', value: `${p.description.sections} sections` }); }
+      else results.push({ field: 'Description', status: 'check', value: '', reason: 'The description editor could not be reached. Use Copy description and paste it.' });
     } else {
       results.push({ field: 'Description', status: 'check', missing: true, value: '', reason: 'Description editor not found. Use Copy description and paste it.' });
     }
     for (const f of p.fields) {
-      if (!f.value || /^unassigned$/i.test(f.value)) { results.push({ field: f.name, status: 'kept', value: f.value || '—', reason: 'Left empty' }); continue; }
+      if (!f.value || /^unassigned$/i.test(f.value)) { results.push({ field: f.name, status: 'kept', value: f.value || '—', reason: 'Not changed in Zoho' }); continue; }
       results.push(await fillField({ ...f, kind: 'dropdown' }, opt, used));
     }
     results.push(...await fillTags(p.tags, p.tags.values, used));
