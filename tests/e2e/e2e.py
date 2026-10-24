@@ -3,7 +3,8 @@ Usage: python e2e.py <extension dir> <out dir> [port]"""
 import sys, os, json, tempfile, subprocess, time, traceback, base64
 from playwright.sync_api import sync_playwright
 
-EXT, OUT = sys.argv[1], sys.argv[2]
+EXT, OUT = os.path.abspath(sys.argv[1]), os.path.abspath(sys.argv[2])
+os.makedirs(OUT, exist_ok=True)
 PORT = int(sys.argv[3]) if len(sys.argv) > 3 else 8765
 HERE = os.path.dirname(os.path.abspath(__file__))
 ANSWER = json.load(open(os.path.join(HERE, "answer.json"), encoding="utf-8"))
