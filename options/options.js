@@ -129,7 +129,9 @@ function secLength() {
   <div><h2>Writing length</h2><p class="desc">How much detail the AI writes in each section.</p></div>
   <fieldset style="border:0;padding:0;margin:0;display:flex;flex-direction:column;gap:10px"><legend class="lbl" style="margin-bottom:8px">Length</legend>
   ${opt.map(([v, n, d]) => `<label class="chk"><input type="radio" name="len" value="${v}" data-path="writingLength" ${S.writingLength === v ? 'checked' : ''}><span><strong style="font-weight:600">${n}</strong><br><span class="hint">${d}</span></span></label>`).join('')}
-  </fieldset></section>`;
+  </fieldset>
+  <label class="chk"><input type="checkbox" data-type="bool" data-path="pageErrors" ${S.pageErrors ? 'checked' : ''}><span>Collect page errors<br><span class="hint">Off by default. When on, QArator watches console errors and failed requests on the sites you test and offers them for the report. Tabs that were already open need one reload.</span></span></label>
+  </section>`;
 }
 
 function exampleTitle() {

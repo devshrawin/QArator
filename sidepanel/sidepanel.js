@@ -85,7 +85,7 @@ async function activeTab() {
 async function pageInfo(tab) {
   try {
     const info = await chrome.tabs.sendMessage(tab.id, { type: 'qarator:pageInfo' });
-    if (info) return { ...info, errorsIncluded: info.errors.length > 0 };
+    if (info) return S.pageErrors ? { ...info, errorsIncluded: info.errors.length > 0 } : { ...info, errors: null, errorsIncluded: false };
   } catch (e) { /* content script not in this tab yet */ }
   try {
     const [r] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: () => ({ url: location.href, title: document.title, viewport: { w: innerWidth, h: innerHeight, dpr: devicePixelRatio || 1 } }) });
@@ -117,7 +117,7 @@ async function refreshQuota() {
 const quotaHtml = () => (quotaNote ? `<div class="hint" role="status" style="text-align:center;color:var(--acc-text)">${esc(quotaNote)} <button type="button" class="btn b-ghost b-sm" data-action="usage" style="height:auto;padding:0 4px">Usage</button></div>` : '');
 const modelLabel = () => (S.ai.model === AUTO ? 'Auto model' : S.ai.model);
 
-const cap = () => ({ note: st.note, steps: st.steps, page: st.page, env,
+const cap = () => ({ note: st.note, steps: st.steps, page: st.page && !S.pageErrors ? { ...st.page, errorsIncluded: false } : st.page, env,
   shotNames: [...st.shots.map((s) => s.name), ...(st.videos || []).flatMap((v) => v.frames.map((f, i) => `${v.name} (frame ${i + 1} of ${v.frames.length}, ${v.dur} video)`))] });
 // Screenshots, then a few frames of each recording, shrunk for the AI.
 async function aiImages() {
@@ -311,7 +311,7 @@ const tagSuggestions = () => (st.report ? suggestTags(st.report, S.tags.list, S.
 
 async function exportWord() {
   try {
-    const blob = await exportDocx(st, S, env, { tags: tagSuggestions() });
+    const blob = await exportDocx({ ...st, page: cap().page }, S, env, { tags: tagSuggestions() });
     const base = `qarator_${stamp()}`;
     const url = URL.createObjectURL(blob);
     downloadDataUrl(url, `${base}.docx`);
@@ -433,7 +433,7 @@ async function renderEmpty() {
     <div style="flex:1;min-width:0"><h2>Set up QArator · about 2 minutes</h2><p>Add your AI key, project code and Zoho address. QArator tests the key for you.</p>
     <button type="button" class="btn b-pri b-sm" data-action="setup" style="margin-top:10px">Start setup</button></div></div>` : ''}
   <div><h1 class="h1">Capture what's wrong</h1>
-  <p class="hint" style="margin:4px 0 0">QArator saves the visible part of the tab with its URL, browser details and page errors.</p></div>
+  <p class="hint" style="margin:4px 0 0">QArator saves the visible part of the tab with its URL and browser details${S.pageErrors ? ' and page errors' : ''}.</p></div>
   <div class="stack">
     <button type="button" class="btn b-acc wide" data-action="capture" style="height:44px;font-size:14px">${icon.capture} Capture visible area <span class="kbd" style="margin-left:4px">Alt+Shift+S</span></button>
     <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px">${recButtons(false).replace(/btn b-ghost/g, 'btn b-sec')}</div>
@@ -494,11 +494,12 @@ function errorsBlock() {
   const p = st.page;
   if (!p) return '';
   let chip = '';
-  if (p.errors === null || p.errors === undefined) chip = `<span class="chip" title="Reload the tab once so QArator can collect errors">Page errors unavailable</span>`;
+  if (!S.pageErrors) chip = '';
+  else if (p.errors === null || p.errors === undefined) chip = `<span class="chip" title="Reload the tab once so QArator can collect errors">Page errors unavailable</span>`;
   else if (!p.errors.length) chip = `<span class="chip">No page errors</span>`;
   else chip = `<button type="button" class="chip" data-action="toggle-errors" aria-pressed="${p.errorsIncluded}">${p.errorsIncluded ? icon.check.replace('width="16" height="16"', 'width="12" height="12"') : ''}${p.errors.length} page error${p.errors.length === 1 ? '' : 's'} captured</button>`;
   const vp = p.viewport ? `<span class="chip">Viewport ${p.viewport.w} × ${p.viewport.h}</span>` : '';
-  const list = p.errors && p.errors.length && p.errorsIncluded
+  const list = !S.pageErrors ? '' : p.errors && p.errors.length && p.errorsIncluded
     ? `<div class="errlist mono">${p.errors.slice(0, 5).map((e) => `<div>${esc(e.message)}${e.source ? ' · ' + esc(e.source) : ''}${e.count > 1 ? ` (×${e.count})` : ''}</div>`).join('')}${p.errors.length > 5 ? `<div class="hint">and ${p.errors.length - 5} more</div>` : ''}</div>`
     : p.errors && p.errors.length ? `<div class="hint" style="margin-top:8px">Page errors won't be sent or added to the report.</div>` : '';
   return `<div class="chips">${env.browser ? `<span class="chip">${esc(env.browser)}</span>` : ''}${env.os ? `<span class="chip">${esc(env.os)}</span>` : ''}${vp}${chip}</div>${list}`;
@@ -555,7 +556,7 @@ function renderCaptured() {
   dock.innerHTML = `
   <button type="button" class="btn b-pri wide" data-action="write" style="height:40px" ${recording ? 'aria-disabled="true"' : ''}>Write bug report <span class="kbd" style="margin-left:4px">Ctrl+Enter</span></button>
   <button type="button" class="btn b-sec wide b-sm" data-action="export-word" ${recording ? 'aria-disabled="true"' : ''}>${icon.download}Export to Word without AI</button>
-  <div class="hint" style="text-align:center">Sends ${n ? `${n} screenshot${n === 1 ? '' : 's'}, ` : ''}${nv ? `frames of ${nv} video${nv === 1 ? '' : 's'}, ` : ''}your note${st.page?.errorsIncluded ? ', page errors' : ''}${st.page ? ' and the page address' : ''} to ${esc(providerName())} · ${esc(modelLabel())}.</div>
+  <div class="hint" style="text-align:center">Sends ${n ? `${n} screenshot${n === 1 ? '' : 's'}, ` : ''}${nv ? `frames of ${nv} video${nv === 1 ? '' : 's'}, ` : ''}your note${S.pageErrors && st.page?.errorsIncluded ? ', page errors' : ''}${st.page ? ' and the page address' : ''} to ${esc(providerName())} · ${esc(modelLabel())}.</div>
   ${quotaHtml()}`;
   after();
   startRetryTimer();

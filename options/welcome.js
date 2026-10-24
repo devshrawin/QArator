@@ -80,7 +80,6 @@ function tryIt() {
       <li>No AI needed? <strong>Export to Word</strong> saves the URL, screenshots, note and steps in a Word file.</li>
       <li>Type what's wrong and press <span class="kbd">Ctrl+Enter</span> to write the report.</li>
       <li>Open Zoho's Submit Issue form, then <span class="kbd">Ctrl+Enter</span> again to fill it.</li>
-      <li>Tabs that were open before you installed QArator need one reload to collect page errors.</li>
     </ul>
     <div class="row"><button type="button" class="btn b-sec" data-go="panel">Open the panel now</button></div>
     ${nav('Finish')}</div>`;

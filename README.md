@@ -54,7 +54,7 @@ The **URL** section always carries the address of the page you captured (or the 
 | Change | **Edit report**, change anything, then **Fill Zoho form** again; the steps bar at the top goes back to any step |
 | Check | The results list shows what was filled and what needs a manual check, with the reason. **Go to field** jumps to it |
 
-Page errors (console errors, uncaught exceptions, failed requests and resources) are collected on every site from the moment a tab loads. Tabs that were open before QArator was installed need one reload.
+Page errors (console errors, uncaught exceptions, failed requests and resources) are **off by default**. Turn on Settings › Writing length › **Collect page errors** to have them collected on the sites you test and offered for the report; tabs that were already open need one reload. When it is off, QArator does not hook into the pages at all.
 
 ## Privacy
 

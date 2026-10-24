@@ -28,32 +28,49 @@
     "service_worker": "background.js",
     "type": "module"
   },
-  "permissions": ["sidePanel", "storage", "unlimitedStorage", "tabs", "scripting", "activeTab", "tabCapture", "desktopCapture"],
-  "host_permissions": ["<all_urls>"],
+  "permissions": [
+    "sidePanel",
+    "storage",
+    "unlimitedStorage",
+    "tabs",
+    "scripting",
+    "activeTab",
+    "tabCapture",
+    "desktopCapture"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
   "content_scripts": [
     {
-      "matches": ["http://*/*", "https://*/*"],
-      "js": ["content/errors-main.js"],
-      "run_at": "document_start",
-      "world": "MAIN"
-    },
-    {
-      "matches": ["http://*/*", "https://*/*"],
-      "js": ["content/page-hints.js", "content/errors-bridge.js"],
+      "matches": [
+        "http://*/*",
+        "https://*/*"
+      ],
+      "js": [
+        "content/page-hints.js",
+        "content/errors-bridge.js"
+      ],
       "run_at": "document_start"
     }
   ],
   "commands": {
     "open-panel": {
-      "suggested_key": { "default": "Alt+Shift+Q" },
+      "suggested_key": {
+        "default": "Alt+Shift+Q"
+      },
       "description": "Open the QArator panel"
     },
     "capture": {
-      "suggested_key": { "default": "Alt+Shift+S" },
+      "suggested_key": {
+        "default": "Alt+Shift+S"
+      },
       "description": "Capture the visible area of the current tab"
     },
     "record": {
-      "suggested_key": { "default": "Alt+Shift+R" },
+      "suggested_key": {
+        "default": "Alt+Shift+R"
+      },
       "description": "Start or stop recording the current tab"
     }
   }

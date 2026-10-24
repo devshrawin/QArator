@@ -117,6 +117,16 @@ try:
             urls = sw.evaluate("""async () => { for (let i = 0; i < 40; i++) { const t = await chrome.tabs.query({}); if (t.some((x) => /welcome[.]html/.test(x.url || x.pendingUrl || ''))) return t.map((x) => x.url || x.pendingUrl); await new Promise((r) => setTimeout(r, 200)); } return (await chrome.tabs.query({})).map((x) => x.url); }""")
             check("setup: welcome tab opens on install", any("welcome.html" in u for u in urls), str(urls))
         phase(welcome_opened)
+        def errors_default_off():
+            reg = sw.evaluate("() => chrome.scripting.getRegisteredContentScripts()")
+            check("page errors: off by default, no page hook registered", reg == [], str(reg))
+        phase(errors_default_off)
+        sw.evaluate("async () => { const { settings = {} } = await chrome.storage.local.get('settings'); await chrome.storage.local.set({ settings: { ...settings, pageErrors: true } }); }")
+        time.sleep(0.2)
+        for _ in range(20):
+            if sw.evaluate("async () => (await chrome.scripting.getRegisteredContentScripts()).length"):
+                break
+            sw.evaluate("() => new Promise((r) => setTimeout(r, 150))")
         site = ctx.new_page()
         site.on("console", lambda m: None)
         site.goto(f"{BASE}/test.html")
@@ -555,6 +565,9 @@ try:
             txt = [x.text for x in d.paragraphs]
             check("word (report): title, URL, sections, fields", txt[0].startswith("UR | Department Portal") and any(t.startswith("URL: http://localhost") for t in txt) and "Expected Result" in txt and "Issue fields" in txt, str(txt[:6]))
             check("word (report): screenshot embedded, video listed", len(d.inline_shapes) == 1 and any("_rec1." in t for t in txt), f"{len(d.inline_shapes)} images")
+            set_settings({"pageErrors": False})
+            sw.evaluate("() => new Promise((r) => setTimeout(r, 400))")
+            check("page errors off: page hook unregistered", sw.evaluate("async () => (await chrome.scripting.getRegisteredContentScripts()).length") == 0)
             panel.wait_for_timeout(500); panel.evaluate("() => chrome.storage.local.remove('draft')")
             panel.reload(); panel.wait_for_timeout(800); panel.evaluate(PATCH)
             site.goto(f"{BASE}/test.html"); site.wait_for_timeout(800)
@@ -564,6 +577,8 @@ try:
             panel.wait_for_timeout(800); print("  probe after note:", panel.evaluate("async () => { const d = (await chrome.storage.local.get('draft')).draft; return d ? { view: d.view, shots: d.shots.length, note: d.note } : null; }"))
             panel.click("[data-action=toggle-steps]")
             panel.fill("#steps", "Open the citizen portal\nSwitch language to ML")
+            pt = panel.inner_text("#main") + panel.inner_text("#dock")
+            check("page errors off: no error chip or mention in the panel", "page error" not in pt.lower(), [l for l in pt.split(chr(10)) if "error" in l.lower()][:3])
             with panel.expect_download() as dl:
                 panel.click("#dock [data-action=export-word]")
             path = os.path.join(OUT, "12-no-ai.docx"); dl.value.save_as(path)
@@ -573,6 +588,7 @@ try:
             print("  no-AI word:", txt[:12])
             check("word (no AI): note, steps, URL, location, screenshot", "What's wrong" in txt and "Language toggle leaves the hero in English" in txt and "1.\tOpen the citizen portal" in txt
                   and any(t.startswith("URL: http://localhost") for t in txt) and any("SEVI Dashboard" in t for t in txt) and len(d.inline_shapes) == 1, str(txt[:12]))
+            check("page errors off: not in the Word file", "Page errors" not in txt, str([t for t in txt if "rror" in t]))
             check("word (no AI): no AI call made", True)
         phase(word_export)
 
