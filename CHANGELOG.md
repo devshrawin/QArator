@@ -9,6 +9,7 @@
 - **Zoho dropdowns**: lists that load more options as they scroll (Classification) are read to the end; a value Zoho lacks now shows Zoho's real options and a *Use Zoho's list* button that updates settings. Default Classification and Device Type lists match the Amnex Zoho portal.
 - Page names in another script (e.g. Malayalam headings) are not used in the English title.
 - The draft is saved the moment the panel closes.
+- **Appearance** in Settings: theme (System / Light / Dark), text size, field glow (Off / Subtle / Strong), animations, side panel spacing. Per person, not exported. The field glow is much more visible.
 - New permissions: `tabCapture`, `desktopCapture` (recording).
 
 ## 1.1.0 · 2026-10-24
