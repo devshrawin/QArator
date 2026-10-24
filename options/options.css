@@ -2,7 +2,7 @@
 .top { border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--bg); z-index: 5; }
 .top-in { padding-top: 14px; padding-bottom: 14px; display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
 #mark { display: inline-flex; }
-.brand { font-size: 15px; font-weight: 600; }
+.brand { font-size: calc(15px * var(--fs)); font-weight: 600; }
 .grow { flex: 1; }
 .layout { display: flex; flex-wrap: wrap; gap: 32px; }
 .nav { flex: 1 1 180px; max-width: 220px; padding-top: 36px; position: sticky; top: 60px; align-self: flex-start; }
@@ -13,17 +13,17 @@
 main { flex: 999 1 560px; min-width: 0; max-width: 820px; padding-bottom: 120px; }
 .sec { padding: 36px 0; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 18px; scroll-margin-top: 64px; }
 .sec:first-child { border-top: 0; }
-.sec h2 { font-size: 18px; font-weight: 600; margin: 0; }
-.sec h3 { font-size: 13px; font-weight: 600; margin: 0 0 4px; }
+.sec h2 { font-size: calc(18px * var(--fs)); font-weight: 600; margin: 0; }
+.sec h3 { font-size: calc(13px * var(--fs)); font-weight: 600; margin: 0 0 4px; }
 .desc { margin: 4px 0 0; color: var(--ink2); }
-.lbl { font-size: 12px; font-weight: 600; color: var(--ink2); display: block; margin: 0 0 4px; }
+.lbl { font-size: calc(12px * var(--fs)); font-weight: 600; color: var(--ink2); display: block; margin: 0 0 4px; }
 .g2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 16px; }
 .g4 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px 16px; }
 @media (max-width: 640px) { .g2, .g4 { grid-template-columns: 1fr; } }
 .row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 .tbl-wrap { overflow-x: auto; }
 .tbl { width: 100%; border-collapse: collapse; min-width: 640px; }
-.tbl th { font-size: 12px; font-weight: 600; color: var(--ink2); text-align: left; padding: 0 8px 6px 0; border-bottom: 1px solid var(--line); }
+.tbl th { font-size: calc(12px * var(--fs)); font-weight: 600; color: var(--ink2); text-align: left; padding: 0 8px 6px 0; border-bottom: 1px solid var(--line); }
 .tbl td { padding: 6px 8px 6px 0; border-bottom: 1px solid var(--line); vertical-align: middle; }
 .tbl input.field, .tbl select.field { height: 30px; }
 .chk { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; }
@@ -35,8 +35,8 @@ main { flex: 999 1 560px; min-width: 0; max-width: 820px; padding-bottom: 120px;
 .secrow .guide { grid-column: 2 / -1; }
 @media (max-width: 640px) { .secrow { grid-template-columns: 64px minmax(0, 1fr); } .secrow .guide { grid-column: 1 / -1; } }
 .example { background: var(--acc-soft); border-radius: 8px; padding: 10px 12px; }
-.example .lab { font-size: 12px; font-weight: 600; color: var(--acc-text); }
-.example .t { font-weight: 600; font-size: 14px; word-break: break-word; }
+.example .lab { font-size: calc(12px * var(--fs)); font-weight: 600; color: var(--acc-text); }
+.example .t { font-weight: 600; font-size: calc(14px * var(--fs)); word-break: break-word; }
 .status { display: inline-flex; align-items: center; gap: 6px; }
 .status.bad { color: var(--acc-text); }
 
@@ -46,3 +46,13 @@ main { flex: 999 1 560px; min-width: 0; max-width: 820px; padding-bottom: 120px;
 .meter i { display: block; height: 100%; background: var(--ink2); }
 .meter i.q { background: var(--acc); }
 .meter i.s { background: var(--acc-text); }
+
+/* appearance */
+.segf { border: 0; padding: 0; margin: 0; min-width: 0; }
+.seg { display: inline-flex; flex-wrap: wrap; gap: 2px; padding: 2px; border: 1px solid var(--fline); border-radius: 8px; }
+.seg label { position: relative; cursor: pointer; }
+.seg input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; }
+.seg span { display: inline-flex; align-items: center; height: 28px; padding: 0 12px; border-radius: 6px; color: var(--ink2); }
+.seg label:hover span { background: var(--chip); color: var(--ink); }
+.seg input:checked + span { background: var(--pri); color: var(--pri-ink); font-weight: 600; }
+.seg input:focus-visible + span { outline: 2px solid var(--focus); outline-offset: 1px; }

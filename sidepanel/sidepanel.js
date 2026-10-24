@@ -5,7 +5,7 @@ import { generateAuto, parseJson, describeError, AIError, AUTO, cooldowns } from
 import { nearLimit, usedToday, istClock } from '../lib/usage.js';
 import { buildPrompt, buildReport, buildTitle, descriptionText, descriptionHtml, rewritePrompt, rewriteResult, locate, isText, stepsText, matchOption, looseKey, learnRule, suggestTags } from '../lib/report.js';
 import { detectEnv, fileToDataUrl, forAi, thumb } from '../lib/env.js';
-import { esc, icon, orb, beam, markSvg, applyTheme, watchTheme, toast, copyText, downloadDataUrl, fmtTime, uid } from '../lib/ui.js';
+import { esc, icon, orb, beam, markSvg, applyTheme, applyAppearance, watchTheme, toast, copyText, downloadDataUrl, fmtTime, uid } from '../lib/ui.js';
 import { openMarkup } from './markup.js';
 import { exportDocx } from './export.js';
 import { startRecording, extFor, fmtDur, fmtSize } from './recorder.js';
@@ -848,8 +848,10 @@ chrome.runtime.onMessage.addListener((msg) => {
   $('#btn-history').innerHTML = icon.clock;
   $('#btn-settings').innerHTML = icon.settings;
   S = await loadSettings();
+  applyAppearance(S);
   onSettingsChanged((s) => {
     S = s;
+    applyAppearance(S);
     if (st.error && (st.error.kind === 'nokey' || st.error.kind === 'nobase') && (S.ai.apiKey || S.ai.provider === 'compatible')) st.error = null;
     if (st.view !== 'writing') render();
   });
