@@ -588,7 +588,27 @@ try:
             panel.wait_for_timeout(500)
             h = panel.inner_text("#main")
             check("history: filled report listed", "Filled in Zoho" in h, h[:200].replace("\n", " | "))
-            panel.click("[data-action=history-open]")
+            # two more saved reports, then tick all and export one Word file
+            sw.evaluate("""async () => { const { history } = await chrome.storage.local.get('history'); const h = history[0];
+              const more = [1, 2].map((n) => ({ ...JSON.parse(JSON.stringify(h)), id: h.id + n, title: `Second bug ${n}`, status: 'Copied, not filled' }));
+              await chrome.storage.local.set({ history: [...more, ...history] }); }""")
+            panel.click("[data-action=history-back]"); panel.click("#btn-history"); panel.wait_for_timeout(500)
+            check("history export: button waits for a tick", panel.get_attribute("#hist-export", "aria-disabled") == "true")
+            panel.locator("[data-hsel]").first.check()
+            check("history export: count follows ticks", "Export 1 report to Word" in panel.inner_text("#hist-export"))
+            panel.check("#hsel-all")
+            n = panel.locator("[data-hsel]").count()
+            check("history export: select all", f"Export {n} reports to Word" in panel.inner_text("#hist-export"), panel.inner_text("#hist-export"))
+            shot("14-history-export")
+            import docx as pydocx
+            with panel.expect_download() as dl:
+                panel.click("#hist-export")
+            path = os.path.join(OUT, "15-history.docx"); dl.value.save_as(path)
+            d = pydocx.Document(path)
+            titles = [x.text for x in d.paragraphs if x.text.startswith(("UR |", "Second bug"))]
+            breaks = sum(1 for x in d.paragraphs if 'w:br w:type="page"' in x._p.xml or "w:type=\"page\"" in x._p.xml)
+            check("history export: one file, one report per page", len(titles) == n and breaks == n - 1 and dl.value.suggested_filename.startswith("qarator_reports_"), f"{len(titles)} titles, {breaks} breaks, {dl.value.suggested_filename}")
+            panel.click("[data-action=history-open] >> nth=-1")
             panel.wait_for_selector("#title-preview")
             check("history: reopen loads report", "Dark Mode" in panel.inner_text("#title-preview"))
             to_capture()

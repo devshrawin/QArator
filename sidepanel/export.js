@@ -7,6 +7,42 @@ import { loadImage } from '../lib/env.js';
 
 const when = (ts) => new Date(ts).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
 
+// The written sections and the issue fields of one report.
+function reportBody(r, S, { withTags = false } = {}) {
+  const blocks = [];
+  for (const s of r.sections.filter((x) => x.text.trim())) {
+    if (s.id === 'url_note') continue; // the URL is above
+    blocks.push({ h2: s.name });
+    const lines = s.text.split('\n').map((l) => l.trim()).filter(Boolean);
+    if (s.layout === 'numbered' || s.layout === 'bullets') blocks.push({ list: lines, numbered: s.layout === 'numbered' });
+    else blocks.push({ p: s.text.trim() });
+  }
+  const fields = S.fields.filter((f) => r.fields[f.id]);
+  if (fields.length) {
+    blocks.push({ h2: 'Issue fields' });
+    for (const f of fields) blocks.push({ kv: [f.name, r.fields[f.id]] });
+  }
+  const tags = withTags ? (r.tags || []).filter((t) => t.on).map((t) => t.name) : [];
+  if (tags.length) { blocks.push({ h2: 'Tags' }); blocks.push({ list: tags }); }
+  return blocks;
+}
+
+/** Saved reports from Recent reports in one document, one per page. Text only: history keeps no screenshots. */
+export function exportReports(entries, S) {
+  const blocks = [];
+  entries.forEach((h, i) => {
+    if (i) blocks.push({ pagebreak: true });
+    const r = h.report, p = h.page || {};
+    blocks.push({ h1: h.title || buildTitle(r, S) });
+    if (p.url) blocks.push({ kv: ['URL', p.url], link: true });
+    const loc = ['portal', 'module', 'page'].map((k) => r.segments[k]).filter(Boolean).join(' › ');
+    if (loc) blocks.push({ kv: ['Location', loc] });
+    blocks.push({ kv: ['Status', `${h.status} · ${when(h.at)}`] });
+    blocks.push(...reportBody(r, S, { withTags: true }));
+  });
+  return buildDocx(blocks);
+}
+
 export async function exportDocx(st, S, env, { tags = [] } = {}) {
   const r = st.report;
   const p = st.page || {};
@@ -22,15 +58,7 @@ export async function exportDocx(st, S, env, { tags = [] } = {}) {
   if (envLine) blocks.push({ kv: ['Environment', envLine] });
 
   if (r) {
-    for (const s of r.sections.filter((x) => x.text.trim())) {
-      if (s.id === 'url_note') continue; // the URL is above
-      blocks.push({ h2: s.name });
-      const lines = s.text.split('\n').map((l) => l.trim()).filter(Boolean);
-      if (s.layout === 'numbered' || s.layout === 'bullets') blocks.push({ list: lines, numbered: s.layout === 'numbered' });
-      else blocks.push({ p: s.text.trim() });
-    }
-    blocks.push({ h2: 'Issue fields' });
-    for (const f of S.fields) if (r.fields[f.id]) blocks.push({ kv: [f.name, r.fields[f.id]] });
+    blocks.push(...reportBody(r, S));
   } else {
     if (st.note.trim()) { blocks.push({ h2: "What's wrong" }); blocks.push({ p: st.note.trim() }); }
     const steps = st.steps.split('\n').map((l) => l.trim()).filter(Boolean);

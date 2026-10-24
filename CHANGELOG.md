@@ -3,6 +3,7 @@
 ## 1.2.0 · 2026-10-24
 - **Record video**: *Record tab* (one click, or Alt+Shift+R) or *Record screen* (Chrome's picker, mouse pointer shows). Saved as MP4, attached to Zoho with the screenshots, a few frames go to the AI so it can describe what happens. Up to 5 minutes.
 - **Export to Word**: works without AI (URL, location, environment, note, steps, page errors, screenshots, video names) and with a report (title, sections, fields, suggested tags). Videos are saved next to it.
+- **Recent reports → Word**: tick reports (or Select all) and export them as one Word file, one report per page (text only; history keeps no screenshots).
 - **Steps bar** (Capture · Review · Fill in Zoho) at the top of the panel; the filled screen explains how to change something: *Edit report*, then fill again.
 - **Tags**: QArator no longer types tags into Zoho by default; after filling it lists the matching tags from your team list with a Copy button each. *Also add ticked tags in Zoho* in settings turns filling back on.
 - **Learned URL rules**: portal, module and page from a report you fill, copy or export are saved for that page.

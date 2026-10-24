@@ -7,7 +7,7 @@ import { buildPrompt, buildReport, buildTitle, descriptionText, descriptionHtml,
 import { detectEnv, fileToDataUrl, forAi, thumb } from '../lib/env.js';
 import { esc, icon, orb, beam, markSvg, applyTheme, applyAppearance, watchTheme, toast, copyText, downloadDataUrl, fmtTime, uid } from '../lib/ui.js';
 import { openMarkup } from './markup.js';
-import { exportDocx } from './export.js';
+import { exportDocx, exportReports } from './export.js';
 import { startRecording, extFor, fmtDur, fmtSize } from './recorder.js';
 import { putVideo, getVideo, pruneVideos, blobToDataUrl } from '../lib/videostore.js';
 import { saveSettings } from '../lib/settings.js';
@@ -732,19 +732,34 @@ function renderFilled() {
   after();
 }
 
+// Ticked reports in Recent reports, for "Export to Word". Not saved: it starts empty each time.
+const histSel = new Set();
 async function renderHistory() {
   const list = await history();
+  for (const id of [...histSel]) if (!list.some((h) => String(h.id) === id)) histSel.delete(id);
   main.innerHTML = `
   <div style="display:flex;align-items:center;justify-content:space-between;margin:-8px">
     <button type="button" class="btn b-ghost b-sm" data-action="history-back">${icon.back}Back</button>
     ${list.length ? '<button type="button" class="btn b-ghost b-sm" data-action="history-clear">Clear list</button>' : ''}</div>
   <h1 class="h1">Recent reports</h1>
-  <div>${list.length ? list.map((h) => `<div class="hist-item"><div style="flex:1;min-width:0"><div class="t">${esc(h.title)}</div><div class="hint">${esc(h.status)} · ${new Date(h.at).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}</div></div>
+  ${list.length ? `<label class="chk inline" style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:-12px"><input type="checkbox" id="hsel-all" ${histSel.size === list.length ? 'checked' : ''}>Select all</label>` : ''}
+  <div>${list.length ? list.map((h) => `<div class="hist-item"><input type="checkbox" data-hsel="${h.id}" ${histSel.has(String(h.id)) ? 'checked' : ''} aria-label="Select ${esc(h.title)}" style="margin-top:3px;flex:none;width:16px;height:16px;accent-color:var(--pri)">
+    <div style="flex:1;min-width:0"><div class="t">${esc(h.title)}</div><div class="hint">${esc(h.status)} · ${new Date(h.at).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}</div></div>
     <button type="button" class="btn b-ghost b-sm" data-action="history-copy" data-id="${h.id}" aria-label="Copy title">${icon.copy}</button>
     <button type="button" class="btn b-sec b-sm" data-action="history-open" data-id="${h.id}">Open</button></div>`).join('')
-    : '<p class="hint">Reports you fill or copy appear here. Screenshots are not kept.</p>'}</div>`;
-  dock.innerHTML = '';
+    : '<p class="hint">Reports you fill, copy or export appear here. Screenshots are not kept.</p>'}</div>`;
+  dock.innerHTML = list.length ? histDock() : '';
   after();
+}
+const histDock = () => `<button type="button" class="btn b-pri wide" data-action="history-export" id="hist-export" ${histSel.size ? '' : 'aria-disabled="true"'}>${icon.download}${histSel.size ? `Export ${histSel.size} report${histSel.size === 1 ? '' : 's'} to Word` : 'Tick reports to export to Word'}</button>
+  <div class="hint" style="text-align:center">One Word file, one report per page. History keeps text only, so screenshots are not included.</div>`;
+async function exportHistory() {
+  const list = (await history()).filter((h) => histSel.has(String(h.id)));
+  if (!list.length) return;
+  const url = URL.createObjectURL(exportReports(list, S));
+  downloadDataUrl(url, `qarator_reports_${stamp()}.docx`);
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+  toast(`${list.length} report${list.length === 1 ? '' : 's'} saved to Downloads`);
 }
 
 // ---------- events ----------
@@ -801,7 +816,8 @@ document.addEventListener('click', async (e) => {
     case 'next': st = fresh(); saveDraft(); pruneVideos([]); return render();
     case 'history': st.back = st.view === 'history' ? st.back : st.view; st.view = 'history'; return render();
     case 'history-back': st.view = st.back || 'capture'; return render();
-    case 'history-clear': await chrome.storage.local.set({ history: [] }); return render();
+    case 'history-clear': await chrome.storage.local.set({ history: [] }); histSel.clear(); return render();
+    case 'history-export': return exportHistory();
     case 'history-copy': { const h = (await history()).find((x) => String(x.id) === id); if (h) copyText(h.title, 'Title copied'); return; }
     case 'history-open': {
       const h = (await history()).find((x) => String(x.id) === id);
@@ -826,6 +842,13 @@ document.addEventListener('change', (e) => {
   }
   if (t.dataset.tag !== undefined) { st.report.tags[Number(t.dataset.tag)].on = t.checked; saveDraft(); }
   if (t.id === 'file') { addFiles(t.files); t.value = ''; }
+  if (t.dataset.hsel !== undefined || t.id === 'hsel-all') {
+    if (t.id === 'hsel-all') document.querySelectorAll('[data-hsel]').forEach((c) => { c.checked = t.checked; if (t.checked) histSel.add(c.dataset.hsel); else histSel.delete(c.dataset.hsel); });
+    else if (t.checked) histSel.add(t.dataset.hsel); else histSel.delete(t.dataset.hsel);
+    const all = $('#hsel-all'), boxes = document.querySelectorAll('[data-hsel]');
+    if (all) all.checked = boxes.length > 0 && [...boxes].every((c) => c.checked);
+    dock.innerHTML = histDock();
+  }
 });
 document.addEventListener('keydown', (e) => {
   if ($('#overlay').firstChild) return; // markup editor handles its own keys
