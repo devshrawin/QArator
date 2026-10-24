@@ -3,6 +3,10 @@
 ## 1.2.0 · 2026-10-24
 - **Record video**: *Record tab* (one click, or Alt+Shift+R) or *Record screen* (Chrome's picker, mouse pointer shows). Saved as MP4, attached to Zoho with the screenshots, a few frames go to the AI so it can describe what happens. Up to 5 minutes.
 - **Export to Word**: works without AI (URL, location, environment, note, steps, page errors, screenshots, video names) and with a report (title, sections, fields, suggested tags). Videos are saved next to it.
+- **Generate & next bug**: saves the bug to the new **Bug list** and writes it in the background while you capture the next one. Each bug shows Waiting / Writing / Ready / Not written / Filled in Zoho; open a ready bug to review and fill, try again on failures. Tick bugs to export **full bugs** (report and screenshots) or **notes only** (page address, screenshots, what's wrong), one Word file with a page per bug. After filling, the panel offers the next ready bug.
+- **What's wrong is required** before generating or exporting.
+- **Backup AI key**: when the main key runs out or is rejected, the same model is tried on the backup key before other models. Quota and usage are tracked per key.
+- **Running-low alert**: the panel warns at 80% of a model's daily limit and when a key runs out (Google's free-tier limits are assumed until Google reports the real one; limits can be typed in Settings › Usage).
 - **Recent reports → Word**: tick reports (or Select all) and export them as one Word file, one report per page (text only; history keeps no screenshots).
 - **Page errors are off by default** (Settings › Collect page errors). When off, the page hook is not injected and nothing about errors shows in the panel, the AI prompt or exports.
 - **Steps bar** (Capture · Review · Fill in Zoho) at the top of the panel; the filled screen explains how to change something: *Edit report*, then fill again.

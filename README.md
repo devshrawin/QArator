@@ -34,6 +34,14 @@ Settings › **Usage** counts every request per model for today, 7 or 30 days: r
 
 The **URL** section always carries the address of the page you captured (or the tab you're on when there's no screenshot). Portal, Module and Page for the title are read from that page: the host name (for example `...-department-portal.` gives *Department Portal*), the breadcrumb, the highlighted menu item, the selected tab and the heading. URL rules in Settings still win when one matches, and the AI fills anything left empty. All of it is editable in review.
 
+## Bug list: generate in the background
+
+Add the screenshots and **What's wrong** (required), then either **Generate report** to review it now, or **Generate & next bug** (Ctrl+Shift+Enter) to save it to the **Bug list** and carry on testing while the AI writes it. The list button in the header shows how many are ready. Open a ready bug to review it and fill Zoho; after filling, the panel offers the next ready one. Tick bugs to export them to Word, either as **full bugs** or as **notes only** (page address, screenshots and what's wrong). Bugs are written while the side panel is open; one interrupted by closing the panel is written when it opens again.
+
+## Backup key and quota
+
+Settings › AI provider › **Backup key** is used when the main key runs out or is rejected. For Gemini, create it in a different Google Cloud project or account: Google counts free quota per project. The panel warns when a model is at 80% of its daily limit and when QArator switches to the backup key; Settings › Usage shows each key separately.
+
 ## Videos, Word export and tags
 
 - **Record tab** (Alt+Shift+R) records the page you're testing; **Record screen** opens Chrome's picker for a screen or window and shows the mouse pointer. Recordings are MP4, up to 5 minutes, attached to Zoho with the screenshots, and the AI reads a few frames of each.

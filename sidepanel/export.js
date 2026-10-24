@@ -43,6 +43,47 @@ export function exportReports(entries, S) {
   return buildDocx(blocks);
 }
 
+async function shotBlocks(shots) {
+  const out = [];
+  for (const s of shots || []) {
+    const img = await loadImage(s.dataUrl);
+    out.push({ img: { ...dataUrlBytes(s.dataUrl), w: img.naturalWidth, h: img.naturalHeight }, caption: s.name });
+  }
+  return out;
+}
+
+/**
+ * Bugs from the Bug list in one document, one per page. full: the AI report where there is one;
+ * otherwise (or for a bug not written yet) just the page address, the screenshots and "What's wrong".
+ */
+export async function exportBugs(bugs, S, { full = true } = {}) {
+  const blocks = [];
+  for (const [i, b] of bugs.entries()) {
+    if (i) blocks.push({ pagebreak: true });
+    const r = full ? b.report : null, p = b.snap.page || {};
+    const note = String(b.snap.note || '').trim();
+    blocks.push({ h1: r ? buildTitle(r, S) : (note.split('\n')[0] || 'Bug') });
+    if (p.url) blocks.push({ kv: ['URL', p.url], link: true });
+    if (r) {
+      const loc = ['portal', 'module', 'page'].map((k) => r.segments[k]).filter(Boolean).join(' › ');
+      if (loc) blocks.push({ kv: ['Location', loc] });
+      blocks.push(...reportBody(r, S, { withTags: true }));
+    } else {
+      blocks.push({ h2: "What's wrong" });
+      blocks.push({ p: note || '—' });
+    }
+    if ((b.snap.videos || []).length) {
+      blocks.push({ h2: 'Videos' });
+      blocks.push({ list: b.snap.videos.map((v) => `${v.name} (${v.dur})`) });
+    }
+    if ((b.snap.shots || []).length) {
+      blocks.push({ h2: 'Screenshots' });
+      blocks.push(...await shotBlocks(b.snap.shots));
+    }
+  }
+  return buildDocx(blocks);
+}
+
 export async function exportDocx(st, S, env, { tags = [] } = {}) {
   const r = st.report;
   const p = st.page || {};

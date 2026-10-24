@@ -2,12 +2,13 @@
 // updates state without re-rendering so focus and caret stay put.
 import { loadSettings, onSettingsChanged, PROVIDERS } from '../lib/settings.js';
 import { generateAuto, parseJson, describeError, AIError, AUTO, cooldowns } from '../lib/ai.js';
-import { nearLimit, usedToday, istClock } from '../lib/usage.js';
+import { nearLimit, usedToday, istClock, parseLimits } from '../lib/usage.js';
 import { buildPrompt, buildReport, buildTitle, descriptionText, descriptionHtml, rewritePrompt, rewriteResult, locate, isText, stepsText, matchOption, looseKey, learnRule, suggestTags } from '../lib/report.js';
 import { detectEnv, fileToDataUrl, forAi, thumb } from '../lib/env.js';
 import { esc, icon, orb, beam, markSvg, applyTheme, applyAppearance, watchTheme, toast, copyText, downloadDataUrl, fmtTime, uid } from '../lib/ui.js';
 import { openMarkup } from './markup.js';
-import { exportDocx, exportReports } from './export.js';
+import { exportDocx, exportReports, exportBugs } from './export.js';
+import { loadBugs, updateBugs, patchBug, removeBugs, addBug, bugNote, STATUS } from './queue.js';
 import { startRecording, extFor, fmtDur, fmtSize } from './recorder.js';
 import { putVideo, getVideo, pruneVideos, blobToDataUrl } from '../lib/videostore.js';
 import { saveSettings } from '../lib/settings.js';
@@ -47,8 +48,9 @@ addEventListener('pagehide', flushDraft);
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushDraft(); });
 function writeDraft() {
   saveTimer = 0;
-  const d = { ...st, view: st.view === 'writing' ? 'capture' : st.view === 'history' ? st.back : st.view, writing: null, busy: null, zoho: null, error: st.error && st.error.kind === 'ratelimit' ? st.error : null };
+  const d = { ...st, view: st.view === 'writing' ? 'capture' : st.view === 'history' || st.view === 'bugs' ? st.back : st.view, writing: null, busy: null, zoho: null, error: st.error && st.error.kind === 'ratelimit' ? st.error : null };
   chrome.storage.local.set({ draft: d }).catch((e) => console.warn('QArator: draft not saved', e && e.message));
+  syncBug();
 }
 async function loadDraft() {
   const { draft } = await chrome.storage.local.get('draft');
@@ -100,31 +102,65 @@ async function notePage() {
   const { tab } = await activeTab().catch(() => ({}));
   if (tab && /^(https?|file):/.test(tab.url || '')) st.page = { ...(await pageInfo(tab)), capturedAt: Date.now() };
 }
+// Only limits Google reported or the tester typed stop a model from being tried; assumed ones only warn.
 async function quotaOpts() {
   const { usage, learnedLimits = {} } = await chrome.storage.local.get(['usage', 'learnedLimits']);
-  return { limits: learnedLimits, used: (m) => usedToday(usage, m) };
+  return { limits: { ...learnedLimits, ...parseLimits(S.usage.limits) }, used: (m, k) => usedToday(usage, m, k) };
 }
-// One line under the Write button when a model is near its daily limit or resting after one.
-let quotaNote = '';
+const keyName = (m) => m.replace(/@backup$/, ' (backup key)');
+// A warning under the Generate buttons when a model is running low, used up or resting.
+let quota = null; // { level: 'low' | 'out', text, needBackup }
 async function refreshQuota() {
   const { usage, learnedLimits = {} } = await chrome.storage.local.get(['usage', 'learnedLimits']);
   const resting = Object.entries(await cooldowns());
-  const parts = nearLimit(usage, learnedLimits).map((h) => `${h.model}: ${h.used} of ${h.limit} requests used today`);
-  if (resting.length) parts.push(`${resting.map(([m]) => m).join(', ')} resting until ${istClock(Math.min(...resting.map(([, u]) => u)))}`);
-  const next = parts.length ? `${parts.join(' · ')}.${S.ai.model === AUTO || S.ai.fallback !== false ? ' Other models are used meanwhile.' : ''}` : '';
-  if (next !== quotaNote) { quotaNote = next; if (st.view === 'capture') render(); }
+  const hasBackup = !!String(S.ai.apiKey2 || '').trim();
+  const hits = nearLimit(usage, { learned: learnedLimits, typed: parseLimits(S.usage.limits) });
+  const parts = hits.map((h) => `${h.model}${h.key === 'backup' ? ' (backup key)' : ''}: ${h.used} of ${h.source === 'assumed' ? 'about ' : ''}${h.limit} requests used today`);
+  if (resting.length) parts.push(`${resting.map(([m]) => keyName(m)).join(', ')} resting until ${istClock(Math.min(...resting.map(([, u]) => u)))}`);
+  const mainOut = resting.some(([m]) => !m.endsWith('@backup')) || hits.some((h) => h.key === 'main' && h.out);
+  const usingBackup = hasBackup && mainOut;
+  const next = !parts.length ? null : {
+    level: mainOut || hits.some((h) => h.out) ? 'out' : 'low',
+    text: `${parts.join(' · ')}.${usingBackup ? ' QArator is using your backup key.' : S.ai.model === AUTO || S.ai.fallback !== false ? ' Other models are used meanwhile.' : ''}`,
+    needBackup: !hasBackup && S.ai.provider === 'gemini'
+  };
+  if (JSON.stringify(next) !== JSON.stringify(quota)) { quota = next; if (st.view === 'capture') render(); }
 }
-const quotaHtml = () => (quotaNote ? `<div class="hint" role="status" style="text-align:center;color:var(--acc-text)">${esc(quotaNote)} <button type="button" class="btn b-ghost b-sm" data-action="usage" style="height:auto;padding:0 4px">Usage</button></div>` : '');
+const quotaHtml = () => (quota ? `<div class="hint" role="status" id="quota" style="text-align:center;color:var(--acc-text)">${quota.level === 'out' ? '<strong>Quota running out.</strong> ' : '<strong>Running low.</strong> '}${esc(quota.text)}
+  ${quota.needBackup ? '<button type="button" class="btn b-ghost b-sm" data-action="settings" style="height:auto;padding:0 4px">Add a backup key</button>' : ''}
+  <button type="button" class="btn b-ghost b-sm" data-action="usage" style="height:auto;padding:0 4px">Usage</button></div>` : '');
 const modelLabel = () => (S.ai.model === AUTO ? 'Auto model' : S.ai.model);
 
-const cap = () => ({ note: st.note, steps: st.steps, page: st.page && !S.pageErrors ? { ...st.page, errorsIncluded: false } : st.page, env,
-  shotNames: [...st.shots.map((s) => s.name), ...(st.videos || []).flatMap((v) => v.frames.map((f, i) => `${v.name} (frame ${i + 1} of ${v.frames.length}, ${v.dur} video)`))] });
+// What the AI is told about a bug: the current one, or one saved in the Bug list.
+const capOf = (b) => ({ note: b.note, steps: b.steps, page: b.page && !S.pageErrors ? { ...b.page, errorsIncluded: false } : b.page, env,
+  shotNames: [...b.shots.map((s) => s.name), ...(b.videos || []).flatMap((v) => v.frames.map((f, i) => `${v.name} (frame ${i + 1} of ${v.frames.length}, ${v.dur} video)`))] });
+const cap = () => capOf(st);
 // Screenshots, then a few frames of each recording, shrunk for the AI.
-async function aiImages() {
+async function aiImages(b = st) {
   const out = [];
-  for (const s of st.shots) out.push(await forAi(s.dataUrl));
-  for (const v of st.videos || []) for (const f of v.frames) out.push(await forAi(f));
+  for (const s of b.shots) out.push(await forAi(s.dataUrl));
+  for (const v of b.videos || []) for (const f of v.frames) out.push(await forAi(f));
   return out;
+}
+/** One AI report for a bug (the current one or a saved one). */
+async function generateFor(b, signal, onPhase = () => {}) {
+  if (!S.ai.apiKey && S.ai.provider !== 'compatible') throw new AIError('nokey', 'no key');
+  const images = await aiImages(b);
+  onPhase(1);
+  const { system, text, rule } = buildPrompt(S, capOf(b));
+  const p = generateAuto(S.ai, { system, text, images, json: true, maxTokens: 4096, kind: 'write' }, signal, await quotaOpts());
+  setTimeout(() => onPhase(2), 700);
+  const { text: out, model } = await p;
+  onPhase(3);
+  const report = buildReport(S, capOf(b), parseJson(out), rule);
+  report.model = model;
+  return report;
+}
+const needNote = () => !st.note.trim();
+function askForNote() {
+  toast("Add what's wrong first. One line is enough.", 2600);
+  const n = $('#note');
+  if (n) { n.focus(); n.closest('[data-beam]')?.setAttribute('data-active', ''); }
 }
 const stamp = (d = new Date()) => { const p = (n) => String(n).padStart(2, '0'); return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`; };
 // One name per screenshot, used in the report text, the Zoho attachment and Save screenshots.
@@ -163,23 +199,14 @@ async function addFiles(files) {
 async function write() {
   if (st.view === 'writing') return;
   if (recording) { toast('Stop the recording first.'); return; }
-  if (!st.shots.length && !st.videos.length && !st.note.trim()) { toast('Capture a screenshot or describe the problem first.'); $('#note')?.focus(); return; }
+  if (needNote()) { askForNote(); return; }
   st.error = null;
   st.view = 'writing'; st.writing = { phase: 0 }; render();
   ctrl = new AbortController();
   try {
-    if (!S.ai.apiKey && S.ai.provider !== 'compatible') throw new AIError('nokey', 'no key');
     if (!st.page) await notePage();
-    const images = await aiImages();
-    setPhase(1);
-    const { system, text, rule } = buildPrompt(S, cap());
-    const p = generateAuto(S.ai, { system, text, images, json: true, maxTokens: 4096, kind: 'write' }, ctrl.signal, await quotaOpts());
-    setTimeout(() => st.view === 'writing' && st.writing.phase === 1 && setPhase(2), 700);
-    const { text: out, model } = await p;
-    setPhase(3);
-    const ans = parseJson(out);
-    st.report = buildReport(S, cap(), ans, rule);
-    st.report.model = model;
+    st.report = await generateFor(st, ctrl.signal, (n) => { if (n !== 2 || (st.writing && st.writing.phase === 1)) setPhase(n); });
+    if (st.bugId) patchBug(st.bugId, { status: 'ready', report: st.report, error: null });
     st.view = 'review'; st.writing = null; st.zoho = null;
     saveDraft(); render(); $('#main').scrollTop = 0;
   } catch (e) {
@@ -253,6 +280,7 @@ async function fillZoho() {
     st.fill = { results: good[0].results, tabId: tab.id, at: Date.now() };
     st.view = 'filled';
     await saveHistory('Filled in Zoho');
+    if (st.bugId) await patchBug(st.bugId, { status: 'filled', report: st.report, filledAt: Date.now() });
     await learn();
     saveDraft(); render(); $('#main').scrollTop = 0;
   } catch (e) {
@@ -291,6 +319,66 @@ async function useZohoOptions(name) {
   saveDraft(); render();
   toast(`${name} options updated from Zoho`);
 }
+
+// ---------- Bug list (Generate & next bug) ----------
+let bugCounts = { all: 0, ready: 0, busy: 0 };
+async function refreshBugCounts() {
+  const list = await loadBugs();
+  bugCounts = { all: list.length, ready: list.filter((b) => b.status === 'ready').length, busy: list.filter((b) => b.status === 'waiting' || b.status === 'writing').length };
+  const n = bugCounts.ready + bugCounts.busy;
+  $('#btn-bugs').innerHTML = icon.list + (bugCounts.all ? `<span class="count" aria-label="${bugCounts.ready} ready">${bugCounts.ready || n}</span>` : '');
+  $('#btn-bugs').title = bugCounts.all ? `Bug list · ${bugCounts.ready} ready${bugCounts.busy ? `, ${bugCounts.busy} being written` : ''}` : 'Bug list';
+}
+// Save the current bug to the Bug list, have the AI write it in the background, start the next one.
+async function generateLater() {
+  if (recording) { toast('Stop the recording first.'); return; }
+  if (needNote()) { askForNote(); return; }
+  if (!st.page) await notePage();
+  const snap = { shots: st.shots, videos: st.videos, page: st.page, note: st.note, steps: st.steps };
+  if (st.bugId) await patchBug(st.bugId, { snap, status: 'waiting', report: null, error: null });
+  else await addBug({ id: uid(), at: Date.now(), status: 'waiting', snap });
+  st = fresh(); saveDraft(); render();
+  toast('Saved to the Bug list. The report is being written; capture the next bug.', 3200);
+  runQueue();
+}
+// One bug at a time, oldest first, while the panel is open. A bug left "writing" by a closed panel is retried.
+let queueBusy = false;
+async function runQueue() {
+  if (queueBusy) return;
+  queueBusy = true;
+  try {
+    for (;;) {
+      const next = (await loadBugs()).find((b) => b.status === 'waiting');
+      if (!next) break;
+      await patchBug(next.id, { status: 'writing', startedAt: Date.now(), error: null });
+      try {
+        const report = await generateFor(next.snap);
+        await patchBug(next.id, { status: 'ready', report, error: null });
+      } catch (e) {
+        const d = describeError(e);
+        await patchBug(next.id, { status: 'failed', error: { kind: e.kind || 'provider', title: d.title, body: d.body, detail: e.detail || e.message || '' } });
+        if (['nokey', 'nobase', 'auth'].includes(e.kind)) break; // every other bug would fail the same way
+      }
+    }
+  } finally { queueBusy = false; }
+}
+async function openBug(id) {
+  const b = (await loadBugs()).find((x) => x.id === id);
+  if (!b || b.status === 'writing') return;
+  st = { ...fresh(), ...b.snap, videos: b.snap.videos || [], report: b.report || null, bugId: b.id, view: b.report ? 'review' : 'capture',
+    error: b.status === 'failed' && b.error ? { ...b.error, retryAt: 0 } : null };
+  saveDraft(); render(); $('#main').scrollTop = 0;
+}
+// Edits to an opened bug go back to its entry in the list.
+function syncBug() {
+  if (!st.bugId) return;
+  patchBug(st.bugId, { snap: { shots: st.shots, videos: st.videos, page: st.page, note: st.note, steps: st.steps }, report: st.report });
+}
+async function keepVideoIds() {
+  return [...(st.videos || []).map((v) => v.id), ...(await loadBugs()).flatMap((b) => (b.snap.videos || []).map((v) => v.id))];
+}
+async function pruneUnused() { pruneVideos(await keepVideoIds()); }
+const bugSel = new Set();
 
 async function videoFiles() {
   const out = [];
@@ -412,6 +500,7 @@ function render() {
   main.className = '';
   const v = st.view;
   if (v === 'history') return renderHistory();
+  if (v === 'bugs') return renderBugs();
   if (v === 'writing') return renderWriting();
   if (v === 'review' && st.report) return renderReview();
   if (v === 'filled' && st.fill) return renderFilled();
@@ -554,8 +643,12 @@ function renderCaptured() {
   <div><button type="button" class="btn b-ghost b-sm" data-action="reset" style="margin-left:-8px">Start over</button></div>`;
   const nv = st.videos.length;
   dock.innerHTML = `
-  <button type="button" class="btn b-pri wide" data-action="write" style="height:40px" ${recording ? 'aria-disabled="true"' : ''}>Write bug report <span class="kbd" style="margin-left:4px">Ctrl+Enter</span></button>
-  <button type="button" class="btn b-sec wide b-sm" data-action="export-word" ${recording ? 'aria-disabled="true"' : ''}>${icon.download}Export to Word without AI</button>
+  <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px">
+    <button type="button" class="btn b-pri" data-action="write" data-needs-note style="height:40px" ${recording || needNote() ? 'aria-disabled="true"' : ''} title="Write the report now (Ctrl+Enter)">Generate report</button>
+    <button type="button" class="btn b-sec" data-action="generate-later" data-needs-note style="height:40px" ${recording || needNote() ? 'aria-disabled="true"' : ''} title="Write it in the background and start the next bug (Ctrl+Shift+Enter)">Generate &amp; next bug</button>
+  </div>
+  <button type="button" class="btn b-sec wide b-sm" data-action="export-word" data-needs-note ${recording || needNote() ? 'aria-disabled="true"' : ''}>${icon.download}Export to Word without AI</button>
+  <div class="hint" id="need-note" style="text-align:center;color:var(--acc-text)" ${needNote() ? '' : 'hidden'}>Add what's wrong to continue.</div>
   <div class="hint" style="text-align:center">Sends ${n ? `${n} screenshot${n === 1 ? '' : 's'}, ` : ''}${nv ? `frames of ${nv} video${nv === 1 ? '' : 's'}, ` : ''}your note${S.pageErrors && st.page?.errorsIncluded ? ', page errors' : ''}${st.page ? ' and the page address' : ''} to ${esc(providerName())} · ${esc(modelLabel())}.</div>
   ${quotaHtml()}`;
   after();
@@ -729,8 +822,53 @@ function renderFilled() {
     <button type="button" class="btn b-sec" data-action="back-review">${icon.pen}Edit report</button>
     <button type="button" class="btn b-sec" data-action="fill">Fill again</button>
   </div>
-  <button type="button" class="btn b-pri wide" data-action="next" style="height:40px">Done · start next bug</button>`;
+  ${bugCounts.ready ? `<button type="button" class="btn b-pri wide" data-action="next-ready" style="height:40px">Next ready bug from the list · ${bugCounts.ready}</button>
+  <button type="button" class="btn b-ghost wide b-sm" data-action="next">Done · capture a new bug</button>` : `<button type="button" class="btn b-pri wide" data-action="next" style="height:40px">Done · start next bug</button>`}`;
   after();
+}
+
+async function renderBugs() {
+  const list = await loadBugs();
+  for (const id of [...bugSel]) if (!list.some((b) => b.id === id)) bugSel.delete(id);
+  const when = (ts) => new Date(ts).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
+  const titleOf = (b) => (b.report ? buildTitle(b.report, S) : bugNote(b));
+  main.innerHTML = `
+  <div style="display:flex;align-items:center;justify-content:space-between;margin:-8px">
+    <button type="button" class="btn b-ghost b-sm" data-action="bugs-back">${icon.back}Back</button>
+    ${list.some((b) => b.status === 'filled') ? '<button type="button" class="btn b-ghost b-sm" data-action="bugs-clear-filled">Remove filled bugs</button>' : ''}</div>
+  <div><h1 class="h1">Bug list</h1>
+  <p class="hint" style="margin:4px 0 0">Bugs saved with Generate &amp; next bug. QArator writes them one by one while this panel is open. Open a ready bug to review it and fill Zoho.</p></div>
+  ${list.length ? `<label class="chk inline" style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:-12px"><input type="checkbox" id="bsel-all" ${bugSel.size === list.length ? 'checked' : ''}>Select all</label>` : ''}
+  <div>${list.length ? list.map((b, i) => {
+    const thumb = (b.snap.shots[0] || (b.snap.videos || [])[0] || {}).thumb;
+    return `<div class="bug"><input type="checkbox" data-bsel="${b.id}" ${bugSel.has(b.id) ? 'checked' : ''} aria-label="Select bug ${i + 1}" style="margin-top:3px;flex:none;width:16px;height:16px;accent-color:var(--pri)">
+      ${thumb ? `<img src="${thumb}" alt="">` : ''}
+      <div style="flex:1;min-width:0"><div class="t">${esc(titleOf(b))}</div>
+        <div class="hint" style="margin-top:3px;display:flex;flex-wrap:wrap;gap:4px 8px;align-items:center"><span class="st ${b.status}">${b.status === 'writing' ? orb('working', 20) : ''}${STATUS[b.status] || b.status}</span>${when(b.at)}</div>
+        ${b.status === 'failed' && b.error ? `<div class="hint" style="margin-top:3px;color:var(--acc-text)">${esc(b.error.title)}</div>` : ''}
+        <div style="display:flex;gap:4px;margin:6px 0 0 -8px;flex-wrap:wrap">
+          <button type="button" class="btn b-sec b-sm" data-action="bug-open" data-id="${b.id}" ${b.status === 'writing' ? 'disabled' : ''}>${b.status === 'ready' || b.status === 'filled' ? 'Open report' : 'Open'}</button>
+          ${b.status === 'failed' ? `<button type="button" class="btn b-ghost b-sm" data-action="bug-retry" data-id="${b.id}">Try again</button>` : ''}
+          <button type="button" class="btn b-ghost b-sm" data-action="bug-remove" data-id="${b.id}" aria-label="Remove bug ${i + 1}">${icon.trash}Remove</button>
+        </div></div></div>`;
+  }).join('') : '<p class="hint">No saved bugs. On the capture screen, add a screenshot and what\'s wrong, then press Generate &amp; next bug.</p>'}</div>`;
+  dock.innerHTML = list.length ? bugsDock() : '';
+  after();
+}
+const bugsDock = () => {
+  const n = bugSel.size;
+  return `<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px">
+    <button type="button" class="btn b-pri" data-action="bugs-export-full" ${n ? '' : 'aria-disabled="true"'}>${icon.download}Export ${n || ''} full bug${n === 1 ? '' : 's'}</button>
+    <button type="button" class="btn b-sec" data-action="bugs-export-notes" ${n ? '' : 'aria-disabled="true"'}>${icon.download}Notes only</button></div>
+  <div class="hint" style="text-align:center">${n ? 'One Word file, a page per bug.' : 'Tick bugs to export them.'} Full: the written report with screenshots. Notes only: page address, screenshots and what's wrong.</div>`;
+};
+async function exportBugList(full) {
+  const list = (await loadBugs()).filter((b) => bugSel.has(b.id));
+  if (!list.length) return;
+  const url = URL.createObjectURL(await exportBugs(list, S, { full }));
+  downloadDataUrl(url, `qarator_${full ? 'bugs' : 'notes'}_${stamp()}.docx`);
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+  toast(`${list.length} bug${list.length === 1 ? '' : 's'} saved to Downloads`);
 }
 
 // Ticked reports in Recent reports, for "Export to Word". Not saved: it starts empty each time.
@@ -786,13 +924,22 @@ document.addEventListener('click', async (e) => {
       });
     }
     case 'write': return write();
-    case 'export-word': return exportWord();
+    case 'export-word': return needNote() && !st.report ? askForNote() : exportWord();
+    case 'generate-later': return generateLater();
+    case 'bugs': st.back = st.view === 'bugs' || st.view === 'history' ? st.back : st.view; st.view = 'bugs'; return render();
+    case 'bug-open': return openBug(id);
+    case 'bug-retry': await patchBug(id, { status: 'waiting', error: null }); runQueue(); return;
+    case 'bug-remove': if (!confirm('Remove this bug from the list?')) return; await removeBugs([id]); bugSel.delete(id); if (st.bugId === id) st.bugId = null; pruneUnused(); return;
+    case 'bugs-export-full': return exportBugList(true);
+    case 'bugs-export-notes': return exportBugList(false);
+    case 'bugs-clear-filled': { const ids = (await loadBugs()).filter((b) => b.status === 'filled').map((b) => b.id); await removeBugs(ids); ids.forEach((x) => bugSel.delete(x)); pruneUnused(); return; }
+    case 'next-ready': { const b = (await loadBugs()).find((x) => x.status === 'ready'); if (b) return openBug(b.id); return; }
     case 'use-zoho-options': return useZohoOptions(b.dataset.name);
     case 'record-tab': return startRec('tab');
     case 'record-screen': return startRec('screen');
     case 'stop-rec': return stopRec();
     case 'play-video': return playVideo(id);
-    case 'remove-video': st.videos = st.videos.filter((v) => v.id !== id); saveDraft(); pruneVideos(st.videos.map((v) => v.id)); return render();
+    case 'remove-video': st.videos = st.videos.filter((v) => v.id !== id); saveDraft(); setTimeout(pruneUnused, 600); return render();
     case 'copy-tag': return copyText(tagSuggestions()[Number(id)], 'Tag copied');
     case 'copy-tags': return copyText(tagSuggestions().join(', '), 'Tags copied');
     case 'flow': {
@@ -804,7 +951,7 @@ document.addEventListener('click', async (e) => {
     case 'cancel': ctrl && ctrl.abort(); return;
     case 'dismiss-error': st.error = null; saveDraft(); return render();
     case 'blank': return blankReport();
-    case 'reset': if (confirm('Clear the screenshots, videos and note?')) { st = fresh(); saveDraft(); pruneVideos([]); render(); } return;
+    case 'reset': if (confirm('Clear the screenshots, videos and note?')) { st = fresh(); saveDraft(); pruneUnused(); render(); } return;
     case 'back-capture': st.view = 'capture'; st.zoho = null; saveDraft(); return render();
     case 'back-review': st.view = 'review'; saveDraft(); return render();
     case 'rewrite': return rewrite(id);
@@ -814,9 +961,10 @@ document.addEventListener('click', async (e) => {
     case 'fill': return fillZoho();
     case 'open-zoho': return openZoho();
     case 'goto': return gotoField(b.dataset.name);
-    case 'next': st = fresh(); saveDraft(); pruneVideos([]); return render();
+    case 'next': st = fresh(); saveDraft(); pruneUnused(); return render();
     case 'history': st.back = st.view === 'history' ? st.back : st.view; st.view = 'history'; return render();
     case 'history-back': st.view = st.back || 'capture'; return render();
+    case 'bugs-back': st.view = st.back || 'capture'; return render();
     case 'history-clear': await chrome.storage.local.set({ history: [] }); histSel.clear(); return render();
     case 'history-export': return exportHistory();
     case 'history-copy': { const h = (await history()).find((x) => String(x.id) === id); if (h) copyText(h.title, 'Title copied'); return; }
@@ -831,7 +979,14 @@ document.addEventListener('click', async (e) => {
 
 document.addEventListener('input', (e) => {
   const t = e.target;
-  if (t.dataset.bind) { st[t.dataset.bind] = t.value; saveDraft(); return; }
+  if (t.dataset.bind) {
+    st[t.dataset.bind] = t.value; saveDraft();
+    if (t.dataset.bind === 'note') {
+      document.querySelectorAll('[data-needs-note]').forEach((b) => { if (needNote() || recording) b.setAttribute('aria-disabled', 'true'); else b.removeAttribute('aria-disabled'); });
+      const h = $('#need-note'); if (h) h.hidden = !needNote();
+    }
+    return;
+  }
   if (t.dataset.seg) { st.report.segments[t.dataset.seg] = t.value; updateTitlePreview(); saveDraft(); return; }
   if (t.dataset.sec) { const s = st.report.sections.find((x) => x.id === t.dataset.sec); if (s) s.text = t.value; saveDraft(); }
 });
@@ -843,6 +998,13 @@ document.addEventListener('change', (e) => {
   }
   if (t.dataset.tag !== undefined) { st.report.tags[Number(t.dataset.tag)].on = t.checked; saveDraft(); }
   if (t.id === 'file') { addFiles(t.files); t.value = ''; }
+  if (t.dataset.bsel !== undefined || t.id === 'bsel-all') {
+    if (t.id === 'bsel-all') document.querySelectorAll('[data-bsel]').forEach((c) => { c.checked = t.checked; if (t.checked) bugSel.add(c.dataset.bsel); else bugSel.delete(c.dataset.bsel); });
+    else if (t.checked) bugSel.add(t.dataset.bsel); else bugSel.delete(t.dataset.bsel);
+    const all = $('#bsel-all'), boxes = document.querySelectorAll('[data-bsel]');
+    if (all) all.checked = boxes.length > 0 && [...boxes].every((c) => c.checked);
+    dock.innerHTML = bugsDock();
+  }
   if (t.dataset.hsel !== undefined || t.id === 'hsel-all') {
     if (t.id === 'hsel-all') document.querySelectorAll('[data-hsel]').forEach((c) => { c.checked = t.checked; if (t.checked) histSel.add(c.dataset.hsel); else histSel.delete(c.dataset.hsel); });
     else if (t.checked) histSel.add(t.dataset.hsel); else histSel.delete(t.dataset.hsel);
@@ -859,6 +1021,11 @@ document.addEventListener('keydown', (e) => {
     const raw = e.target.value.trim();
     const v = matchOption(raw, S.tags.list) || raw.toLowerCase();
     if (v && !st.report.tags.some((t) => looseKey(t.name) === looseKey(v))) { st.report.tags.push({ name: v, on: true }); saveDraft(); render(); $('#new-tag')?.focus(); }
+    return;
+  }
+  if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'Enter') {
+    e.preventDefault();
+    if (st.view === 'capture') generateLater();
     return;
   }
   if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
@@ -894,6 +1061,7 @@ chrome.runtime.onMessage.addListener((msg) => {
 (async function start() {
   $('#mark').innerHTML = markSvg(20);
   $('#btn-history').innerHTML = icon.clock;
+  $('#btn-bugs').innerHTML = icon.list;
   $('#btn-settings').innerHTML = icon.settings;
   S = await loadSettings();
   applyAppearance(S);
@@ -902,6 +1070,7 @@ chrome.runtime.onMessage.addListener((msg) => {
     applyAppearance(S);
     if (st.error && (st.error.kind === 'nokey' || st.error.kind === 'nobase') && (S.ai.apiKey || S.ai.provider === 'compatible')) st.error = null;
     if (st.view !== 'writing') render();
+    refreshQuota();
   });
   env = await detectEnv();
   await loadDraft();
@@ -912,7 +1081,12 @@ chrome.runtime.onMessage.addListener((msg) => {
     if (area !== 'local') return;
     if (c.usage || c.modelCooldown || c.learnedLimits) refreshQuota();
     if (c.onboarded && st.view === 'capture') render();
+    if (c.bugs) { refreshBugCounts(); if (st.view === 'bugs') render(); }
   });
+  // a bug left "writing" when the panel closed goes back to waiting, then the queue carries on
+  await updateBugs((list) => list.map((b) => (b.status === 'writing' ? { ...b, status: 'waiting' } : b)));
+  refreshBugCounts();
+  runQueue();
   try {
     const { pendingCapture } = await chrome.storage.session.get('pendingCapture');
     if (pendingCapture && Date.now() - pendingCapture < 5000) { await chrome.storage.session.remove('pendingCapture'); captureTab(); }

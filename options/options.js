@@ -1,7 +1,7 @@
 // QArator settings page. Edits a copy of the settings and autosaves.
 import { loadSettings, saveSettings, normalize, exportFormat, importFormat, DEFAULTS, PROVIDERS, LAYOUTS, SEGMENTS, APPEARANCE, slug } from '../lib/settings.js';
 import { listModels, describeError, rankModels, cooldowns, AUTO } from '../lib/ai.js';
-import { summarize, parsePrices, rowCost, rupees, nextQuotaReset, istClock, usedToday } from '../lib/usage.js';
+import { summarize, parsePrices, rowCost, rupees, nextQuotaReset, istClock, usedToday, limitFor, parseLimits } from '../lib/usage.js';
 import { buildTitle } from '../lib/report.js';
 import { esc, icon, beam, orb, markSvg, applyTheme, applyAppearance, watchTheme, toast, fmtTime } from '../lib/ui.js';
 
@@ -44,6 +44,9 @@ function secAI() {
     <div><label class="lbl" for="key">API key</label>
       <div style="display:flex;gap:6px"><div style="flex:1;min-width:0">${B(`<input id="key" class="field mono" type="${keyShown ? 'text' : 'password'}" data-path="ai.apiKey" value="${esc(S.ai.apiKey)}" autocomplete="off" spellcheck="false" placeholder="${esc(PROVIDERS[p].keyHint)}">`)}</div>
       <button type="button" class="btn b-sec" data-act="show-key" style="flex:none" aria-pressed="${keyShown}">${keyShown ? 'Hide' : 'Show'}</button></div></div>
+    ${p !== 'compatible' ? `<div style="grid-column:1/-1"><label class="lbl" for="key2">Backup key <span style="font-weight:400;color:var(--ink3)">optional</span></label>
+      <div style="max-width:480px">${B(`<input id="key2" class="field mono" type="${keyShown ? 'text' : 'password'}" data-path="ai.apiKey2" value="${esc(S.ai.apiKey2 || '')}" autocomplete="off" spellcheck="false" placeholder="Used when the main key runs out or is rejected">`)}</div>
+      <div class="hint" style="margin-top:4px">${p === 'gemini' ? 'Google counts free quota per Google Cloud project, not per key: create the backup key in a different project or Google account, or it runs out at the same time.' : 'Used when the main key is rate-limited or rejected.'}</div></div>` : ''}
     ${PROVIDERS[p].needsBase ? `<div class="span2" style="grid-column:1/-1"><label class="lbl" for="base">Endpoint base address</label>${B(`<input id="base" class="field mono" data-path="ai.baseUrl" value="${esc(S.ai.baseUrl)}" placeholder="https://your-server/v1">`)}
       <div class="hint" style="margin-top:4px">QArator calls /models and /chat/completions under this address.</div></div>` : ''}
   </div>
@@ -86,15 +89,16 @@ function secUsage() {
   const body = rows.map((r) => {
     const c = rowCost(r, own);
     if (c) { usd += c.usd; assumed ||= c.assumed; }
-    const limit = U.learnedLimits[r.model];
+    const lim = limitFor(r.model, { learned: U.learnedLimits, typed: parseLimits(S.usage.limits) });
     let left = usageDays === 1 ? '<span class="hint">No known limit</span>' : '';
-    if (usageDays === 1 && limit) {
-      const remaining = Math.max(0, limit - usedToday(U.usage, r.model));
-      const pct = Math.round((remaining / limit) * 100);
-      left = `<div class="meter" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}" aria-label="${esc(r.model)} left today"><i class="${pct === 0 ? 's' : pct <= 20 ? 'q' : ''}" style="width:${pct}%"></i></div><div class="hint">${remaining} of ${limit} left</div>`;
+    if (usageDays === 1 && lim) {
+      const remaining = Math.max(0, lim.limit - usedToday(U.usage, r.model, r.key));
+      const pct = Math.round((remaining / lim.limit) * 100);
+      left = `<div class="meter" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}" aria-label="${esc(r.model)} left today"><i class="${pct === 0 ? 's' : pct <= 20 ? 'q' : ''}" style="width:${pct}%"></i></div><div class="hint">${lim.source === 'assumed' ? '~' : ''}${remaining} of ${lim.source === 'assumed' ? '~' : ''}${lim.limit} left${lim.source === 'assumed' ? ' (assumed free-tier limit)' : ''}</div>`;
     }
-    if (U.cool[r.model]) left += `<div class="hint" style="color:var(--acc-text)">Resting until ${istClock(U.cool[r.model])}</div>`;
-    return `<tr><td><strong style="font-weight:600">${esc(r.model)}</strong><div class="hint">${esc(r.provider)}</div></td><td>${KIND[r.kind] || esc(r.kind)}</td>
+    const slot = r.key === 'backup' ? `${r.model}@backup` : r.model;
+    if (U.cool[slot]) left += `<div class="hint" style="color:var(--acc-text)">Resting until ${istClock(U.cool[slot])}</div>`;
+    return `<tr><td><strong style="font-weight:600">${esc(r.model)}</strong><div class="hint">${esc(r.provider)}${r.key === 'backup' ? ' · backup key' : ''}</div></td><td>${KIND[r.kind] || esc(r.kind)}</td>
       <td class="num">${r.req}</td><td class="num">${r.fail ? `${r.fail}${r.rl ? ` (${r.rl} limit)` : ''}` : '0'}</td>
       <td class="num">${r.tin || r.tout ? `${fmtN(r.tin)} / ${fmtN(r.tout)}` : '–'}</td>
       <td class="num">${c ? `${c.assumed ? '~' : ''}${rupees(c.usd, rate)}` : '–'}</td><td>${left}</td></tr>`;
@@ -108,8 +112,10 @@ function secUsage() {
   <div class="row" id="usage-totals" style="gap:6px 18px"><strong>Total ${RANGE[usageDays]}</strong><span>${reqs} request${reqs === 1 ? '' : 's'}</span>
     <span>If paid: about ${rupees(usd, rate)}${assumed ? ' (list prices assumed)' : ''}</span>
     <span class="hint" style="margin-left:auto">Daily quotas reset at ${istClock(nextQuotaReset())} (midnight Pacific)</span></div>
-  <details><summary class="hint" style="cursor:pointer">Prices and exchange rate</summary>
+  <details><summary class="hint" style="cursor:pointer">Daily limits, prices and exchange rate</summary>
     <div class="g2" style="margin-top:10px">
+      <div><label class="lbl" for="ulimits">Daily request limits</label>${B(`<textarea id="ulimits" class="field mono" rows="3" data-path="usage.limits" placeholder="gemini-2.5-flash=250">${esc(S.usage.limits || '')}</textarea>`)}
+        <div class="hint" style="margin-top:4px">One model per line: model=requests per day. Used for the running-low warning; limits Google reports in its rate-limit replies are learned automatically.</div></div>
       <div><label class="lbl" for="uprices">Your prices (USD per million tokens)</label>${B(`<textarea id="uprices" class="field mono" rows="3" data-path="usage.prices" placeholder="gemini-2.5-flash=0.30,2.50">${esc(S.usage.prices)}</textarea>`)}
         <div class="hint" style="margin-top:4px">One model per line: model=input,output. Others use rough list prices.</div></div>
       <div><label class="lbl" for="urate">Rupees per US dollar</label>${B(`<input id="urate" class="field" type="number" min="1" data-type="number" data-path="usage.usdInr" value="${esc(rate)}">`)}</div>

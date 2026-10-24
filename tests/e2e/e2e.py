@@ -28,8 +28,14 @@ def phase(fn):
         traceback.print_exc()
 
 
-def err_body(provider, url=""):
+def err_body(provider, url="", headers=None):
     m = mode["v"]
+    if m == "quota_main" and "gemini-2.5-flash:" in url and (headers or {}).get("x-goog-api-key") == "test-gemini-key":
+        return 429, {"error": {"code": 429, "status": "RESOURCE_EXHAUSTED",
+            "message": "You exceeded your current quota. limit: 20, model: gemini-2.5-flash",
+            "details": [{"violations": [{"quotaId": "GenerateRequestsPerDayPerProjectPerModel-FreeTier"}]}]}}, {}
+    if m == "quota_main":
+        return None
     if m == "quota_flash" and "gemini-2.5-flash:" in url:
         return 429, {"error": {"code": 429, "status": "RESOURCE_EXHAUSTED",
             "message": "You exceeded your current quota. Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 20, model: gemini-2.5-flash\nPlease retry in 39.2s.",
@@ -68,7 +74,7 @@ def make_route(provider):
                 body = {"data": [{"id": "gpt-4.1"}, {"id": "gpt-4o-mini-tts"}, {"id": "text-embedding-3-small"}]}
             return route.fulfill(status=200, headers=hdr, body=json.dumps(body))
         seen[provider].append({"url": url, "headers": req.headers, "body": req.post_data_json})
-        e = err_body(provider, url)
+        e = err_body(provider, url, req.headers)
         if e:
             st, b, extra = e
             text = "Sorry, I can't help with that." if b is None else json.dumps(b)
@@ -216,7 +222,13 @@ try:
         phase(capture)
 
         def write_gemini():
+            check("note required: Generate buttons wait for What's wrong", panel.get_attribute("#dock [data-action=write]", "aria-disabled") == "true"
+                  and panel.get_attribute("#dock [data-action=generate-later]", "aria-disabled") == "true" and panel.locator("#need-note").is_visible())
+            panel.keyboard.press("Control+Enter")
+            panel.wait_for_timeout(300)
+            check("note required: Ctrl+Enter does not write", panel.locator("#title-preview").count() == 0)
             panel.fill("#note", "Dark mode leaves the dashboard canvas white")
+            check("note required: buttons unlock while typing", panel.get_attribute("#dock [data-action=write]", "aria-disabled") is None and not panel.locator("#need-note").is_visible())
             panel.click("#dock [data-action=write]")
             panel.wait_for_selector("#title-preview", timeout=15000)
             title = panel.inner_text("#title-preview").replace("\n", "")
@@ -365,6 +377,36 @@ try:
             to_capture()
         phase(auto_model)
 
+        def backup_key():
+            clear_cool()
+            set_settings({"ai": {"provider": "gemini", "apiKey": "test-gemini-key", "apiKey2": "backup-gemini-key", "model": "auto", "models": []}})
+            panel.wait_for_timeout(300)
+            mode["v"] = "quota_main"
+            n0 = len(seen["gemini"])
+            to_capture()
+            panel.click("#dock [data-action=write]")
+            panel.wait_for_selector("#title-preview", timeout=15000)
+            tried = [(r["url"].split("models/")[1].split(":")[0], r["headers"].get("x-goog-api-key")) for r in seen["gemini"][n0:]]
+            check("backup key: same model retried on the backup key before other models", tried == [("gemini-2.5-flash", "test-gemini-key"), ("gemini-2.5-flash", "backup-gemini-key")], str(tried))
+            cool = sw.evaluate("async () => (await chrome.storage.local.get('modelCooldown')).modelCooldown || {}")
+            check("backup key: only the main key's slot rests", "gemini-2.5-flash" in cool and "gemini-2.5-flash@backup" not in cool, str(list(cool)))
+            n1 = len(seen["gemini"])
+            to_capture(); panel.wait_for_timeout(500)
+            q = panel.inner_text("#dock")
+            check("running-out alert: says the backup key is in use", "Quota running out" in q and "backup key" in q, q[-260:])
+            shot("16-backup-alert")
+            panel.click("#dock [data-action=write]")
+            panel.wait_for_selector("#title-preview", timeout=15000)
+            tried = [r["headers"].get("x-goog-api-key") for r in seen["gemini"][n1:]]
+            check("backup key: resting main key skipped next time", tried == ["backup-gemini-key"], str(tried))
+            mode["v"] = "ok"
+            clear_cool()
+            sw.evaluate("() => chrome.storage.local.remove('learnedLimits')")
+            set_settings({"ai": {"apiKey2": ""}})
+            panel.wait_for_timeout(300)
+            to_capture()
+        phase(backup_key)
+
         def no_screenshot_url():
             panel.wait_for_timeout(500); panel.evaluate("() => chrome.storage.local.remove('draft')")
             panel.reload(); panel.wait_for_timeout(800); panel.evaluate(PATCH)
@@ -377,6 +419,80 @@ try:
             check("no screenshot: module/page from the page", panel.input_value("#seg-module") == "SEVI Dashboard" and panel.input_value("#seg-page") == "State Overview",
                   panel.input_value("#seg-module") + " / " + panel.input_value("#seg-page"))
         phase(no_screenshot_url)
+
+        def bug_queue():
+            import docx as pydocx
+            panel.wait_for_timeout(500); panel.evaluate("() => chrome.storage.local.remove(['draft', 'bugs'])")
+            panel.reload(); panel.wait_for_timeout(800); panel.evaluate(PATCH)
+            site.goto(f"{BASE}/test.html"); site.wait_for_timeout(600)
+            for note in ["Bug A: export button does nothing", "Bug B: date filter ignores end date"]:
+                panel.click("#main [data-action=capture]")
+                panel.wait_for_selector(".shots img", timeout=8000)
+                panel.fill("#note", note)
+                panel.click("#dock [data-action=generate-later]")
+                panel.wait_for_timeout(400)
+                check(f"generate & next: panel is clear for the next bug ({note[:5]})", panel.locator(".shots img").count() == 0 and "Capture what's wrong" in panel.inner_text("#main"))
+            for _ in range(60):
+                bugs = sw.evaluate("async () => ((await chrome.storage.local.get('bugs')).bugs || []).map((b) => b.status)")
+                if bugs and all(x == "ready" for x in bugs):
+                    break
+                panel.wait_for_timeout(250)
+            check("generate & next: both written in the background", bugs == ["ready", "ready"], str(bugs))
+            check("bug list button shows ready count", panel.inner_text("#btn-bugs").strip() == "2", panel.inner_text("#btn-bugs"))
+            panel.click("#btn-bugs")
+            panel.wait_for_selector(".bug")
+            bl = panel.inner_text("#main")
+            check("bug list: titles and Ready status", bl.count("Ready") == 2 and "Dark Mode Leaves" in bl, bl[:300].replace(chr(10), " | "))
+            check("bug list: export waits for ticks", panel.get_attribute("#dock [data-action=bugs-export-full]", "aria-disabled") == "true")
+            panel.check("#bsel-all")
+            shot("17-bug-list")
+            with panel.expect_download() as dl:
+                panel.click("#dock [data-action=bugs-export-full]")
+            path = os.path.join(OUT, "18-bugs-full.docx"); dl.value.save_as(path)
+            d = pydocx.Document(path); txt = [x.text for x in d.paragraphs]
+            check("export full bugs: report + screenshots, page per bug", txt.count("Issue fields") == 2 and len(d.inline_shapes) == 2 and sum('w:type="page"' in x._p.xml for x in d.paragraphs) == 1, f"{txt.count('Issue fields')} reports, {len(d.inline_shapes)} images")
+            with panel.expect_download() as dl:
+                panel.click("#dock [data-action=bugs-export-notes]")
+            path = os.path.join(OUT, "19-bugs-notes.docx"); dl.value.save_as(path)
+            d = pydocx.Document(path); txt = [x.text for x in d.paragraphs]
+            check("export notes only: URL, screenshot, what's wrong", "Issue fields" not in txt and txt.count("What's wrong") == 2 and "Bug A: export button does nothing" in txt
+                  and sum(t.startswith("URL: ") for t in txt) == 2 and len(d.inline_shapes) == 2, str(txt[:8]))
+            panel.locator("[data-action=bug-open]").first.click()
+            panel.wait_for_selector("#title-preview")
+            check("open ready bug: goes to review", "Dark Mode Leaves" in panel.inner_text("#title-preview"))
+            site.goto(f"{ZBASE}/zoho.html"); site.wait_for_timeout(600)
+            panel.click("#dock [data-action=fill]")
+            panel.wait_for_selector("text=Form filled", timeout=30000)
+            st_ = sw.evaluate("async () => (await chrome.storage.local.get('bugs')).bugs.map((b) => b.status)")
+            check("filled bug marked in the list", st_ == ["filled", "ready"], str(st_))
+            check("filled screen offers the next ready bug", "Next ready bug" in panel.inner_text("#dock"))
+            panel.click("#dock [data-action=next-ready]")
+            panel.wait_for_selector("#title-preview")
+            check("next ready bug opens", panel.input_value("#seg-summary") != "")
+            # a failed bug and Try again
+            mode["v"] = "badkey"
+            panel.click("#flow [data-id=capture]")
+            panel.click("[data-action=next]") if panel.locator("[data-action=next]").count() else None
+            panel.wait_for_timeout(300); panel.evaluate("() => chrome.storage.local.remove('draft')"); panel.reload(); panel.wait_for_timeout(800); panel.evaluate(PATCH)
+            site.goto(f"{BASE}/test.html"); site.wait_for_timeout(600)
+            panel.click("#main [data-action=capture]"); panel.wait_for_selector(".shots img", timeout=8000)
+            panel.fill("#note", "Bug C"); panel.click("#dock [data-action=generate-later]")
+            for _ in range(40):
+                last = sw.evaluate("async () => (await chrome.storage.local.get('bugs')).bugs.slice(-1)[0].status")
+                if last in ("failed", "ready"): break
+                panel.wait_for_timeout(250)
+            check("failed bug kept with reason", last == "failed", last)
+            mode["v"] = "ok"
+            panel.click("#btn-bugs"); panel.wait_for_selector("[data-action=bug-retry]")
+            panel.click("[data-action=bug-retry]")
+            for _ in range(40):
+                last = sw.evaluate("async () => (await chrome.storage.local.get('bugs')).bugs.slice(-1)[0].status")
+                if last == "ready": break
+                panel.wait_for_timeout(250)
+            check("try again writes it", last == "ready", last)
+            panel.click("[data-action=bugs-back]")
+            site.goto(f"{BASE}/test.html"); site.wait_for_timeout(500)
+
 
         def markup():
             to_capture()
@@ -645,6 +761,7 @@ try:
             panel.wait_for_timeout(800)
             check("paste image (Ctrl+V)", panel.locator(".shots img").count() == 2, str(panel.locator(".shots img").count()))
         phase(paste_and_file)
+        phase(bug_queue)
 
         def options_page():
             op = ctx.new_page()
