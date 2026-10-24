@@ -1,0 +1,404 @@
+/*! border-beam (c) Jakub Antalik, MIT License. Generated for QArator: size md, sunset, light (qa-beam-l) and dark (qa-beam-d). Active on [data-active] or :focus-within. */
+
+@property --beam-angle-qa-beam-l {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: true;
+}
+
+@property --beam-opacity-qa-beam-l {
+  syntax: "<number>";
+  initial-value: 0;
+  inherits: true;
+}
+
+[data-beam="qa-beam-l"] {
+  position: relative;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+[data-beam="qa-beam-l"]:is([data-active],:focus-within) {
+  animation:
+    beam-spin-qa-beam-l 1.96s linear infinite,
+    beam-fade-in-qa-beam-l 0.6s ease forwards;
+}
+
+[data-beam="qa-beam-l"][data-fading] {
+  animation:
+    beam-spin-qa-beam-l 1.96s linear infinite,
+    beam-fade-out-qa-beam-l 0.5s ease forwards;
+}
+
+[data-beam="qa-beam-l"]:is([data-active],:focus-within)::after,
+[data-beam="qa-beam-l"][data-fading]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 5px;
+  padding: 1px;
+  clip-path: inset(0 round 6px);
+  background: conic-gradient(
+        from var(--beam-angle-qa-beam-l),
+        transparent 0%, transparent 54%,
+        rgba(0, 0, 0, 0.08) 57%,
+        rgba(0, 0, 0, 0.2) 60%,
+        rgba(0, 0, 0, 0.4) 63%,
+        rgba(0, 0, 0, 0.55) 66%,
+        rgba(0, 0, 0, 0.4) 69%,
+        rgba(0, 0, 0, 0.2) 72%,
+        rgba(0, 0, 0, 0.08) 75%,
+        transparent 78%, transparent 100%
+      ),radial-gradient(ellipse 70px 40px at 33% -7.4%, rgb(255, 80, 50), transparent),
+    radial-gradient(ellipse 60px 35px at 12% -5%, rgb(255, 160, 40), transparent),
+    radial-gradient(ellipse 40px 70px at 2.1% 68.3%, rgb(255, 120, 60), transparent),
+    radial-gradient(ellipse 20px 35px at 2.1% 68.3%, rgb(255, 200, 50), transparent),
+    radial-gradient(ellipse 180px 32px at 74.4% 100%, rgb(255, 100, 80), transparent),
+    radial-gradient(ellipse 85px 26px at 55% 100%, rgb(255, 180, 60), transparent),
+    radial-gradient(ellipse 74px 32px at 93.9% 0%, rgb(255, 60, 60), transparent),
+    radial-gradient(ellipse 26px 42px at 100% 27.1%, rgb(255, 140, 50), transparent),
+    radial-gradient(ellipse 52px 48px at 100% 27.1%, rgb(255, 90, 70), transparent);
+  -webkit-mask:
+    conic-gradient(
+      from var(--beam-angle-qa-beam-l),
+      transparent 0%, transparent 30%,
+      rgba(255, 255, 255, 0.1) 36%, rgba(255, 255, 255, 0.35) 44%,
+      white 52%, white 80%,
+      rgba(255, 255, 255, 0.35) 86%, rgba(255, 255, 255, 0.1) 92%,
+      transparent 95%, transparent 100%
+    ),
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: source-in, xor;
+  mask:
+    conic-gradient(
+      from var(--beam-angle-qa-beam-l),
+      transparent 0%, transparent 30%,
+      rgba(255, 255, 255, 0.1) 36%, rgba(255, 255, 255, 0.35) 44%,
+      white 52%, white 80%,
+      rgba(255, 255, 255, 0.35) 86%, rgba(255, 255, 255, 0.1) 92%,
+      transparent 95%, transparent 100%
+    ),
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  mask-composite: intersect, exclude;
+  pointer-events: none;
+  z-index: 2;
+  opacity: calc(var(--beam-opacity-qa-beam-l) * 0.12 * var(--beam-stroke-opacity, 1) * var(--beam-strength, 1));
+  animation: beam-hue-shift-qa-beam-l 12s ease-in-out infinite;
+}
+
+[data-beam="qa-beam-l"]:is([data-active],:focus-within)::before,
+[data-beam="qa-beam-l"][data-fading]::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 6px;
+  background: radial-gradient(ellipse 63px 36px at 33% -7.4%, rgba(255, 80, 50, 0.45), transparent),
+    radial-gradient(ellipse 54px 32px at 12% -5%, rgba(255, 160, 40, 0.45), transparent),
+    radial-gradient(ellipse 36px 63px at 2.1% 68.3%, rgba(255, 120, 60, 0.45), transparent),
+    radial-gradient(ellipse 18px 32px at 2.1% 68.3%, rgba(255, 200, 50, 0.45), transparent),
+    radial-gradient(ellipse 162px 29px at 74.4% 100%, rgba(255, 100, 80, 0.45), transparent),
+    radial-gradient(ellipse 77px 23px at 55% 100%, rgba(255, 180, 60, 0.45), transparent),
+    radial-gradient(ellipse 67px 29px at 93.9% 0%, rgba(255, 60, 60, 0.45), transparent),
+    radial-gradient(ellipse 23px 38px at 100% 27.1%, rgba(255, 140, 50, 0.45), transparent),
+    radial-gradient(ellipse 47px 43px at 100% 27.1%, rgba(255, 90, 70, 0.45), transparent);
+  box-shadow: inset 0 0 9px 1px rgba(0, 0, 0, 0.14);
+  -webkit-mask-image:
+    conic-gradient(
+      from var(--beam-angle-qa-beam-l),
+      transparent 0%, transparent 30%,
+      rgba(255, 255, 255, 0.1) 36%, rgba(255, 255, 255, 0.35) 44%,
+      white 52%, white 80%,
+      rgba(255, 255, 255, 0.35) 86%, rgba(255, 255, 255, 0.1) 92%,
+      transparent 95%, transparent 100%
+    ),
+    linear-gradient(white, transparent 28px, transparent calc(100% - 28px), white),
+    linear-gradient(to right, white, transparent 28px, transparent calc(100% - 28px), white);
+  -webkit-mask-composite: source-in, source-over;
+  mask-image:
+    conic-gradient(
+      from var(--beam-angle-qa-beam-l),
+      transparent 0%, transparent 30%,
+      rgba(255, 255, 255, 0.1) 36%, rgba(255, 255, 255, 0.35) 44%,
+      white 52%, white 80%,
+      rgba(255, 255, 255, 0.35) 86%, rgba(255, 255, 255, 0.1) 92%,
+      transparent 95%, transparent 100%
+    ),
+    linear-gradient(white, transparent 28px, transparent calc(100% - 28px), white),
+    linear-gradient(to right, white, transparent 28px, transparent calc(100% - 28px), white);
+  mask-composite: intersect, add;
+  pointer-events: none;
+  z-index: 1;
+  opacity: calc(var(--beam-opacity-qa-beam-l) * 0.26 * var(--beam-inner-opacity, 1) * var(--beam-strength, 1));
+  clip-path: inset(0 round 6px);
+  animation: beam-hue-shift-qa-beam-l 12s ease-in-out infinite;
+}
+
+[data-beam="qa-beam-l"] [data-beam-bloom] {
+  display: none;
+  position: absolute;
+  inset: 0;
+  border-radius: 5px;
+  clip-path: inset(0 round 6px);
+  background: conic-gradient(
+        from var(--beam-angle-qa-beam-l),
+        transparent 0%, transparent 58%,
+        rgba(0, 0, 0, 0.02) 62%,
+        rgba(0, 0, 0, 0.08) 65%,
+        rgba(0, 0, 0, 0.2) 67%,
+        rgba(0, 0, 0, 0.4) 69%,
+        rgba(0, 0, 0, 0.6) 70%,
+        rgba(0, 0, 0, 0.6) 70.5%,
+        rgba(0, 0, 0, 0.4) 71.5%,
+        rgba(0, 0, 0, 0.2) 73%,
+        rgba(0, 0, 0, 0.08) 75%,
+        rgba(0, 0, 0, 0.02) 78%,
+        transparent 82%
+      );
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  padding: 1px;
+  filter: blur(8px) brightness(1.30) saturate(1.50);
+  pointer-events: none;
+  z-index: 3;
+  opacity: 0;
+}
+
+[data-beam="qa-beam-l"]:is([data-active],:focus-within) [data-beam-bloom],
+[data-beam="qa-beam-l"][data-fading] [data-beam-bloom] {
+  display: block;
+  opacity: calc(var(--beam-opacity-qa-beam-l) * 0.34 * var(--beam-bloom-opacity, 1) * var(--beam-strength, 1));
+}
+
+@keyframes beam-spin-qa-beam-l {
+  to { --beam-angle-qa-beam-l: 360deg; }
+}
+
+@keyframes beam-fade-in-qa-beam-l {
+  to { --beam-opacity-qa-beam-l: 1; }
+}
+
+@keyframes beam-fade-out-qa-beam-l {
+  from { --beam-opacity-qa-beam-l: 1; }
+  to { --beam-opacity-qa-beam-l: 0; }
+}
+
+@keyframes beam-hue-shift-qa-beam-l {
+  0% { filter: hue-rotate(calc(var(--beam-hue-base, 0deg) - 30deg)) brightness(1.30) saturate(1.50); }
+  50% { filter: hue-rotate(calc(var(--beam-hue-base, 0deg) + 30deg)) brightness(1.30) saturate(1.50); }
+  100% { filter: hue-rotate(calc(var(--beam-hue-base, 0deg) - 30deg)) brightness(1.30) saturate(1.50); }
+}
+
+[data-beam="qa-beam-l"][data-paused],
+[data-beam="qa-beam-l"][data-paused]::after,
+[data-beam="qa-beam-l"][data-paused]::before,
+[data-beam="qa-beam-l"][data-paused] [data-beam-bloom] {
+  animation-play-state: paused !important;
+}
+
+
+@property --beam-angle-qa-beam-d {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: true;
+}
+
+@property --beam-opacity-qa-beam-d {
+  syntax: "<number>";
+  initial-value: 0;
+  inherits: true;
+}
+
+[data-beam="qa-beam-d"] {
+  position: relative;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+[data-beam="qa-beam-d"]:is([data-active],:focus-within) {
+  animation:
+    beam-spin-qa-beam-d 1.96s linear infinite,
+    beam-fade-in-qa-beam-d 0.6s ease forwards;
+}
+
+[data-beam="qa-beam-d"][data-fading] {
+  animation:
+    beam-spin-qa-beam-d 1.96s linear infinite,
+    beam-fade-out-qa-beam-d 0.5s ease forwards;
+}
+
+[data-beam="qa-beam-d"]:is([data-active],:focus-within)::after,
+[data-beam="qa-beam-d"][data-fading]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 5px;
+  padding: 1px;
+  clip-path: inset(0 round 6px);
+  background: conic-gradient(
+        from var(--beam-angle-qa-beam-d),
+        transparent 0%, transparent 54%,
+        rgba(255, 255, 255, 0.1) 57%,
+        rgba(255, 255, 255, 0.3) 60%,
+        rgba(255, 255, 255, 0.6) 63%,
+        rgba(255, 255, 255, 0.75) 66%,
+        rgba(255, 255, 255, 0.6) 69%,
+        rgba(255, 255, 255, 0.3) 72%,
+        rgba(255, 255, 255, 0.1) 75%,
+        transparent 78%, transparent 100%
+      ),radial-gradient(ellipse 70px 40px at 33% -7.4%, rgb(255, 80, 50), transparent),
+    radial-gradient(ellipse 60px 35px at 12% -5%, rgb(255, 160, 40), transparent),
+    radial-gradient(ellipse 40px 70px at 2.1% 68.3%, rgb(255, 120, 60), transparent),
+    radial-gradient(ellipse 20px 35px at 2.1% 68.3%, rgb(255, 200, 50), transparent),
+    radial-gradient(ellipse 180px 32px at 74.4% 100%, rgb(255, 100, 80), transparent),
+    radial-gradient(ellipse 85px 26px at 55% 100%, rgb(255, 180, 60), transparent),
+    radial-gradient(ellipse 74px 32px at 93.9% 0%, rgb(255, 60, 60), transparent),
+    radial-gradient(ellipse 26px 42px at 100% 27.1%, rgb(255, 140, 50), transparent),
+    radial-gradient(ellipse 52px 48px at 100% 27.1%, rgb(255, 90, 70), transparent);
+  -webkit-mask:
+    conic-gradient(
+      from var(--beam-angle-qa-beam-d),
+      transparent 0%, transparent 30%,
+      rgba(255, 255, 255, 0.1) 36%, rgba(255, 255, 255, 0.35) 44%,
+      white 52%, white 80%,
+      rgba(255, 255, 255, 0.35) 86%, rgba(255, 255, 255, 0.1) 92%,
+      transparent 95%, transparent 100%
+    ),
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: source-in, xor;
+  mask:
+    conic-gradient(
+      from var(--beam-angle-qa-beam-d),
+      transparent 0%, transparent 30%,
+      rgba(255, 255, 255, 0.1) 36%, rgba(255, 255, 255, 0.35) 44%,
+      white 52%, white 80%,
+      rgba(255, 255, 255, 0.35) 86%, rgba(255, 255, 255, 0.1) 92%,
+      transparent 95%, transparent 100%
+    ),
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  mask-composite: intersect, exclude;
+  pointer-events: none;
+  z-index: 2;
+  opacity: calc(var(--beam-opacity-qa-beam-d) * 0.26 * var(--beam-stroke-opacity, 1) * var(--beam-strength, 1));
+  animation: beam-hue-shift-qa-beam-d 12s ease-in-out infinite;
+}
+
+[data-beam="qa-beam-d"]:is([data-active],:focus-within)::before,
+[data-beam="qa-beam-d"][data-fading]::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 6px;
+  background: radial-gradient(ellipse 63px 36px at 33% -7.4%, rgba(255, 80, 50, 0.45), transparent),
+    radial-gradient(ellipse 54px 32px at 12% -5%, rgba(255, 160, 40, 0.45), transparent),
+    radial-gradient(ellipse 36px 63px at 2.1% 68.3%, rgba(255, 120, 60, 0.45), transparent),
+    radial-gradient(ellipse 18px 32px at 2.1% 68.3%, rgba(255, 200, 50, 0.45), transparent),
+    radial-gradient(ellipse 162px 29px at 74.4% 100%, rgba(255, 100, 80, 0.45), transparent),
+    radial-gradient(ellipse 77px 23px at 55% 100%, rgba(255, 180, 60, 0.45), transparent),
+    radial-gradient(ellipse 67px 29px at 93.9% 0%, rgba(255, 60, 60, 0.45), transparent),
+    radial-gradient(ellipse 23px 38px at 100% 27.1%, rgba(255, 140, 50, 0.45), transparent),
+    radial-gradient(ellipse 47px 43px at 100% 27.1%, rgba(255, 90, 70, 0.45), transparent);
+  box-shadow: inset 0 0 9px 1px rgba(255, 255, 255, 0.27);
+  -webkit-mask-image:
+    conic-gradient(
+      from var(--beam-angle-qa-beam-d),
+      transparent 0%, transparent 30%,
+      rgba(255, 255, 255, 0.1) 36%, rgba(255, 255, 255, 0.35) 44%,
+      white 52%, white 80%,
+      rgba(255, 255, 255, 0.35) 86%, rgba(255, 255, 255, 0.1) 92%,
+      transparent 95%, transparent 100%
+    ),
+    linear-gradient(white, transparent 28px, transparent calc(100% - 28px), white),
+    linear-gradient(to right, white, transparent 28px, transparent calc(100% - 28px), white);
+  -webkit-mask-composite: source-in, source-over;
+  mask-image:
+    conic-gradient(
+      from var(--beam-angle-qa-beam-d),
+      transparent 0%, transparent 30%,
+      rgba(255, 255, 255, 0.1) 36%, rgba(255, 255, 255, 0.35) 44%,
+      white 52%, white 80%,
+      rgba(255, 255, 255, 0.35) 86%, rgba(255, 255, 255, 0.1) 92%,
+      transparent 95%, transparent 100%
+    ),
+    linear-gradient(white, transparent 28px, transparent calc(100% - 28px), white),
+    linear-gradient(to right, white, transparent 28px, transparent calc(100% - 28px), white);
+  mask-composite: intersect, add;
+  pointer-events: none;
+  z-index: 1;
+  opacity: calc(var(--beam-opacity-qa-beam-d) * 0.42 * var(--beam-inner-opacity, 1) * var(--beam-strength, 1));
+  clip-path: inset(0 round 6px);
+  animation: beam-hue-shift-qa-beam-d 12s ease-in-out infinite;
+}
+
+[data-beam="qa-beam-d"] [data-beam-bloom] {
+  display: none;
+  position: absolute;
+  inset: 0;
+  border-radius: 5px;
+  clip-path: inset(0 round 6px);
+  background: conic-gradient(
+        from var(--beam-angle-qa-beam-d),
+        transparent 0%, transparent 58%,
+        rgba(255, 255, 255, 0.03) 62%,
+        rgba(255, 255, 255, 0.08) 65%,
+        rgba(255, 255, 255, 0.2) 67%,
+        rgba(255, 255, 255, 0.45) 69%,
+        rgba(255, 255, 255, 0.85) 70%,
+        rgba(255, 255, 255, 0.85) 70.5%,
+        rgba(255, 255, 255, 0.45) 71.5%,
+        rgba(255, 255, 255, 0.2) 73%,
+        rgba(255, 255, 255, 0.08) 75%,
+        rgba(255, 255, 255, 0.03) 78%,
+        transparent 82%
+      );
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  padding: 1px;
+  filter: blur(8px) brightness(1.30) saturate(1.20);
+  pointer-events: none;
+  z-index: 3;
+  opacity: 0;
+}
+
+[data-beam="qa-beam-d"]:is([data-active],:focus-within) [data-beam-bloom],
+[data-beam="qa-beam-d"][data-fading] [data-beam-bloom] {
+  display: block;
+  opacity: calc(var(--beam-opacity-qa-beam-d) * 0.24 * var(--beam-bloom-opacity, 1) * var(--beam-strength, 1));
+}
+
+@keyframes beam-spin-qa-beam-d {
+  to { --beam-angle-qa-beam-d: 360deg; }
+}
+
+@keyframes beam-fade-in-qa-beam-d {
+  to { --beam-opacity-qa-beam-d: 1; }
+}
+
+@keyframes beam-fade-out-qa-beam-d {
+  from { --beam-opacity-qa-beam-d: 1; }
+  to { --beam-opacity-qa-beam-d: 0; }
+}
+
+@keyframes beam-hue-shift-qa-beam-d {
+  0% { filter: hue-rotate(calc(var(--beam-hue-base, 0deg) - 30deg)) brightness(1.30) saturate(1.20); }
+  50% { filter: hue-rotate(calc(var(--beam-hue-base, 0deg) + 30deg)) brightness(1.30) saturate(1.20); }
+  100% { filter: hue-rotate(calc(var(--beam-hue-base, 0deg) - 30deg)) brightness(1.30) saturate(1.20); }
+}
+
+[data-beam="qa-beam-d"][data-paused],
+[data-beam="qa-beam-d"][data-paused]::after,
+[data-beam="qa-beam-d"][data-paused]::before,
+[data-beam="qa-beam-d"][data-paused] [data-beam-bloom] {
+  animation-play-state: paused !important;
+}
+
+
+[data-beam]{overflow:visible !important;display:block}
+@media (prefers-reduced-motion: reduce){[data-beam],[data-beam]::before,[data-beam]::after{animation-duration:0s !important;animation-iteration-count:1 !important}}

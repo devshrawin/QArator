@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>QArator settings</title>
+<link rel="stylesheet" href="../lib/tokens.css">
+<link rel="stylesheet" href="../lib/border-beam.css">
+<link rel="stylesheet" href="options.css">
+<script src="../lib/thinking-orbs.js"></script>
+<script type="module" src="options.js"></script>
+</head>
+<body>
+<header class="top">
+  <div class="wrap top-in">
+    <span id="mark"></span>
+    <span class="brand">QArator</span>
+    <span style="color:var(--ink3)">/</span>
+    <span class="brand" style="font-weight:400">Settings</span>
+    <span class="grow"></span>
+    <span class="hint" id="saved" role="status" aria-live="polite">Changes save automatically</span>
+  </div>
+</header>
+<div class="wrap layout">
+  <nav class="nav" aria-label="Settings sections">
+    <a href="#ai">AI provider and key</a>
+    <a href="#length">Writing length</a>
+    <a href="#title">Title format</a>
+    <a href="#sections">Description sections</a>
+    <a href="#fields">Issue fields</a>
+    <a href="#tags">Tags</a>
+    <a href="#style">Style example</a>
+    <a href="#zoho">Zoho fill options</a>
+    <a href="#share">Export and import</a>
+  </nav>
+  <main id="main"></main>
+</div>
+<input type="file" id="import-file" accept="application/json,.json" hidden>
+</body>
+</html>

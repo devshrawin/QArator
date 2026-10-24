@@ -1,0 +1,59 @@
+/* QArator shared tokens and controls. System fonts only, so it works offline. */
+:root {
+  color-scheme: light dark;
+  --bg: #FFFFFF; --surface: #F5F6F7; --stage: #E4E7EB; --chip: #EEF0F2;
+  --ink: #16181B; --ink2: #4A5058; --ink3: #646B74;
+  --line: #E2E5E9; --field: #FFFFFF; --fline: #8C939B;
+  --pri: #16181B; --pri-ink: #FFFFFF;
+  --acc: #C2410C; --acc-ink: #FFFFFF; --acc-text: #B13A09; --acc-soft: #FFF1E8;
+  --focus: #16181B; --mark: #FF6A2B;
+  --font: 'Segoe UI', system-ui, -apple-system, Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --mono: 'Cascadia Mono', Consolas, ui-monospace, 'SF Mono', Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #141517; --surface: #1B1D20; --stage: #0C0D0E; --chip: #24272B;
+    --ink: #ECEEF0; --ink2: #B4BAC1; --ink3: #959CA4;
+    --line: #2A2D31; --field: #1B1D20; --fline: #6B727A;
+    --pri: #ECEEF0; --pri-ink: #141517;
+    --acc: #FF7A3D; --acc-ink: #1A0B03; --acc-text: #FF8F5C; --acc-soft: #3A1E10;
+    --focus: #ECEEF0;
+  }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font); font-size: 13px; line-height: 1.45; }
+button, input, select, textarea { font-family: inherit; font-size: 13px; color: inherit; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+a { color: var(--acc-text); }
+.hint { font-size: 12px; color: var(--ink3); }
+.mono { font-family: var(--mono); font-size: 12px; }
+.sr-only { position: absolute !important; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+.btn { height: 36px; padding: 0 12px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer; white-space: nowrap; border: 1px solid transparent; background: transparent; color: var(--ink); text-decoration: none; }
+.btn:disabled, .btn[aria-disabled="true"] { cursor: not-allowed; opacity: .55; }
+.b-pri { background: var(--pri); color: var(--pri-ink); font-weight: 600; }
+.b-acc { background: var(--acc); color: var(--acc-ink); font-weight: 600; }
+.b-sec { border-color: var(--fline); }
+.b-ghost { color: var(--ink2); padding: 0 8px; }
+.b-ghost:hover, .ib:hover { background: var(--chip); }
+.b-sm { height: 28px; font-size: 12px; padding: 0 8px; }
+.wide { width: 100%; }
+.ib { width: 32px; height: 32px; border: 0; background: transparent; color: var(--ink2); border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; padding: 0; cursor: pointer; flex: none; }
+.kbd { font-size: 11px; font-weight: 400; line-height: 16px; padding: 0 5px; border-radius: 4px; border: 1px solid currentColor; }
+.field { width: 100%; border: 1px solid var(--fline); background: var(--field); color: var(--ink); border-radius: 6px; padding: 6px 9px; line-height: 1.45; display: block; }
+input.field, select.field { height: 32px; padding: 0 9px; }
+textarea.field { resize: vertical; min-height: 44px; }
+.field::placeholder { color: var(--ink3); }
+.chip { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px; border-radius: 13px; background: var(--chip); color: var(--ink2); font-size: 12px; border: 1px solid transparent; }
+button.chip { cursor: pointer; }
+.chip[aria-pressed="true"] { background: transparent; border-color: var(--ink); color: var(--ink); }
+.chip[aria-pressed="false"] { background: transparent; border-color: var(--fline); text-decoration: line-through; }
+.alert { background: var(--acc-soft); border-radius: 8px; padding: 12px; display: flex; gap: 10px; align-items: flex-start; }
+.alert h2 { font-size: 13px; font-weight: 600; margin: 0; }
+.alert p { margin: 2px 0 0; font-size: 12px; color: var(--ink2); }
+.alert-icon { flex: none; margin-top: 1px; color: var(--acc-text); }
+.ai-tag { font-size: 10px; font-weight: 600; letter-spacing: .02em; color: var(--ink3); border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; line-height: 14px; }
+.sep { color: var(--acc-text); font-weight: 400; padding: 0 2px; }
+canvas[data-orb] { display: block; flex: none; }
+.toast { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); background: var(--pri); color: var(--pri-ink); padding: 8px 14px; border-radius: 6px; font-size: 12px; z-index: 50; box-shadow: 0 4px 16px rgba(0,0,0,.2); }
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }

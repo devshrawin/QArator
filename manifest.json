@@ -1,0 +1,56 @@
+{
+  "manifest_version": 3,
+  "name": "QArator",
+  "version": "1.0.0",
+  "description": "Capture a bug, describe it in one line, and fill the Zoho Submit Issue form in your team's format.",
+  "minimum_chrome_version": "116",
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+  "action": {
+    "default_title": "Open QArator",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png"
+    }
+  },
+  "side_panel": {
+    "default_path": "sidepanel/sidepanel.html"
+  },
+  "options_ui": {
+    "page": "options/options.html",
+    "open_in_tab": true
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "permissions": ["sidePanel", "storage", "unlimitedStorage", "tabs", "scripting", "activeTab"],
+  "host_permissions": ["<all_urls>"],
+  "content_scripts": [
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "js": ["content/errors-main.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "js": ["content/errors-bridge.js"],
+      "run_at": "document_start"
+    }
+  ],
+  "commands": {
+    "open-panel": {
+      "suggested_key": { "default": "Alt+Shift+Q" },
+      "description": "Open the QArator panel"
+    },
+    "capture": {
+      "suggested_key": { "default": "Alt+Shift+S" },
+      "description": "Capture the visible area of the current tab"
+    }
+  }
+}

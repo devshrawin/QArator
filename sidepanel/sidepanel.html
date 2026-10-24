@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>QArator</title>
+<link rel="stylesheet" href="../lib/tokens.css">
+<link rel="stylesheet" href="../lib/border-beam.css">
+<link rel="stylesheet" href="sidepanel.css">
+<script src="../lib/thinking-orbs.js"></script>
+<script type="module" src="sidepanel.js"></script>
+</head>
+<body>
+<div id="app">
+  <header class="hdr">
+    <span id="mark"></span>
+    <span class="wm">QArator</span>
+    <span class="proj" id="proj"></span>
+    <span class="grow"></span>
+    <button type="button" class="ib" id="btn-history" data-action="history" aria-label="Recent reports" title="Recent reports"></button>
+    <button type="button" class="ib" id="btn-settings" data-action="settings" aria-label="Settings" title="Settings (Ctrl+,)"></button>
+  </header>
+  <main id="main" tabindex="-1"></main>
+  <footer id="dock" class="dock"></footer>
+  <div id="drop" class="drop" hidden><div>Drop the image to add it</div></div>
+</div>
+<div id="overlay"></div>
+<input type="file" id="file" accept="image/*" multiple hidden>
+</body>
+</html>
