@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.3.0 · 2026-10-26
+- **One-step setup**: paste an AI key and you are ready. The key is tested as it is pasted; project code and Zoho address steps are gone (the team defaults are already in place) and a team format file can still be imported from the same screen.
+- **Settings are shorter**: AI key, writing length, usage and appearance stay in view; title format, sections, fields, tags, style example, Zoho labels and export/import sit in a collapsed *Team format and Zoho* group.
+- **Auto model** leads with Gemini 2.5 Flash (fast, roomiest free quota), then newer Flash models, Flash-Lite and Pro as quotas run out or a model stalls.
+- **A model that stops answering no longer hangs the report**: each try waits 40 seconds (was 120), then the next model or the backup key is tried; after two silent models the error names them.
+- **Reports are always written in English**, also for pages shown in Malayalam or another language; non-English text is only quoted when the bug is about that text. Non-English parts of the tab title are no longer sent.
+
 ## 1.2.0 · 2026-10-24
 - **Record screen** (or Alt+Shift+R): Chrome's picker for a screen, window or tab, mouse pointer shows. Saved as MP4, attached to Zoho with the screenshots, a few frames go to the AI so it can describe what happens. Up to 5 minutes.
 - **Export to Word**: works without AI (URL, location, environment, note, steps, page errors, screenshots, video names) and with a report (title, sections, fields, suggested tags). Videos are saved next to it.
