@@ -194,7 +194,6 @@ try:
             check("setup: panel shows setup card before a key is set", "Set up QArator" in t, t[:120])
             wz = next(pg for pg in ctx.pages if "welcome.html" in pg.url)
             wz.on("pageerror", lambda e: logs.append(f"[welcome] PAGEERROR: {e}"))
-            wz.click("[data-go=next]")
             wz.fill("#key", "test-gemini-key-000000000000")
             wz.click("[data-go=test]")
             wz.wait_for_selector("#key-status .status", timeout=10000)
@@ -202,8 +201,7 @@ try:
             check("setup: key tested, Auto order shown", "Auto will use gemini-2.5-flash" in st, st)
             wz.screenshot(path=os.path.join(OUT, "00-setup-key.png"))
             wz.click("#next")
-            wz.fill("#proj", "UR"); wz.press("#proj", "Tab")
-            wz.click("#next")
+            check("setup: only two steps (key, ready)", wz.locator("#dots i").count() == 2)
             wz.click("#next")
             wz.wait_for_selector("text=All set")
             ob = sw.evaluate("async () => (await chrome.storage.local.get(['onboarded', 'settings']))")
@@ -804,6 +802,8 @@ try:
             op.wait_for_timeout(2500)
             opts = op.locator("#model option").all_inner_texts()
             check("options: OpenAI models load by themselves, Auto first", opts == ["Auto (recommended)", "gpt-4.1"], str(opts))
+            check("settings: team format starts collapsed", not op.evaluate("document.getElementById('advanced').open"))
+            op.click("#advanced > summary")
             op.fill("#tproj", "UR2")
             op.wait_for_timeout(600)
             with op.expect_download() as dl:
@@ -892,6 +892,7 @@ try:
             pick("glow", "strong")
             # per person: not exported, kept on import
             op.wait_for_timeout(500)
+            op.click("#advanced > summary")
             with op.expect_download() as dl:
                 op.click("[data-act=export]")
             data = json.load(open(dl.value.path(), encoding="utf-8"))

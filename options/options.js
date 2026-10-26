@@ -287,7 +287,9 @@ function render() {
   const y = scrollY;
   const a = document.activeElement;
   const keep = a && a.id && main.contains(a) ? { id: a.id, s: a.selectionStart, e: a.selectionEnd } : null;
-  main.innerHTML = secAI() + secLength() + secTitle() + secSections() + secFields() + secTags() + secStyle() + secZoho() + secUsage() + secAppearance() + secShare();
+  main.innerHTML = secAI() + secLength() + secUsage() + secAppearance()
+    + `<details class="adv" id="advanced"${advOpen ? ' open' : ''}><summary><span class="adv-t">Team format and Zoho</span><span class="adv-d">Title format, sections, fields, tags, Zoho labels, export and import. The team defaults already work; open this only to change them.</span></summary>`
+    + secTitle() + secSections() + secFields() + secTags() + secStyle() + secZoho() + secShare() + '</details>';
   applyTheme();
   scrollTo(0, y);
   if (keep) {
@@ -297,6 +299,21 @@ function render() {
 }
 
 // ---------- events ----------
+// The team-format sections sit in one collapsed group so a new user sees only the key, length, usage and look.
+let advOpen = false;
+function openAdvanced(target) {
+  const d = document.getElementById('advanced');
+  if (!d || !target || !d.contains(target)) return;
+  advOpen = true; d.open = true;
+}
+document.addEventListener('toggle', (e) => { if (e.target.id === 'advanced') advOpen = e.target.open; }, true);
+document.addEventListener('click', (e) => {
+  const a = e.target.closest('.nav a[href^="#"]');
+  if (!a) return;
+  const t = document.querySelector(a.getAttribute('href'));
+  if (!t) return;
+  e.preventDefault(); openAdvanced(t); t.scrollIntoView(); history.replaceState(null, '', a.getAttribute('href'));
+});
 document.addEventListener('input', (e) => {
   const el = e.target; const path = el.dataset.path;
   if (!path) return;
@@ -424,7 +441,7 @@ async function doImport(el) {
 function navSpy() {
   const secs = [...document.querySelectorAll('.sec')];
   let cur = secs[0];
-  for (const s of secs) if (s.getBoundingClientRect().top < 140) cur = s;
+  for (const s of secs) if (s.getClientRects().length && s.getBoundingClientRect().top < 140) cur = s;
   document.querySelectorAll('.nav a').forEach((a) => a.classList.toggle('cur', cur && a.getAttribute('href') === '#' + cur.id));
 }
 addEventListener('scroll', navSpy, { passive: true });
@@ -445,5 +462,5 @@ addEventListener('scroll', navSpy, { passive: true });
     if (area === 'local' && c.settings) applyAppearance(normalize(c.settings.newValue));
   });
   watchTheme();
-  if (location.hash) document.querySelector(location.hash)?.scrollIntoView();
+  if (location.hash) { const t = document.querySelector(location.hash); openAdvanced(t); t?.scrollIntoView(); }
 })();

@@ -56,3 +56,15 @@ main { flex: 999 1 560px; min-width: 0; max-width: 820px; padding-bottom: 120px;
 .seg label:hover span { background: var(--chip); color: var(--ink); }
 .seg input:checked + span { background: var(--pri); color: var(--pri-ink); font-weight: 600; }
 .seg input:focus-visible + span { outline: 2px solid var(--focus); outline-offset: 1px; }
+
+/* advanced group */
+.nav a.nav-h { margin-top: 10px; }
+.nav a.sub { padding-left: 22px; font-size: calc(13px * var(--fs)); }
+.adv { border-top: 1px solid var(--line); }
+.adv > summary { cursor: pointer; padding: 22px 0; list-style: none; display: flex; flex-direction: column; gap: 4px; }
+.adv > summary::-webkit-details-marker { display: none; }
+.adv > summary .adv-t { font-size: calc(18px * var(--fs)); font-weight: 600; }
+.adv > summary .adv-t::before { content: 'B8'; display: inline-block; width: 18px; color: var(--ink3); }
+.adv[open] > summary .adv-t::before { content: 'BE'; }
+.adv > summary .adv-d { color: var(--ink2); padding-left: 18px; }
+.adv > summary:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }

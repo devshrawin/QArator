@@ -641,7 +641,7 @@ async function renderEmpty() {
   const setup = !onboarded && !S.ai.apiKey && S.ai.provider !== 'compatible';
   main.innerHTML = `
   ${setup ? `<div class="alert" role="region" aria-label="Set up QArator"><span class="alert-icon">${icon.key}</span>
-    <div style="flex:1;min-width:0"><h2>Set up QArator · about 2 minutes</h2><p>Add your AI key, project code and Zoho address. QArator tests the key for you.</p>
+    <div style="flex:1;min-width:0"><h2>Set up QArator · 30 seconds</h2><p>Paste your AI key. QArator tests it for you; everything else is already set.</p>
     <button type="button" class="btn b-pri b-sm" data-action="setup" style="margin-top:10px">Start setup</button></div></div>` : ''}
   <div><h1 class="h1">Capture what's wrong</h1>
   <p class="hint" style="margin:4px 0 0">QArator saves the visible part of the tab with its URL and browser details${S.pageErrors ? ' and page errors' : ''}.</p></div>
