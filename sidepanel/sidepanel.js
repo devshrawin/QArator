@@ -444,7 +444,7 @@ async function runQueue() {
         await updateBugs((l) => l.map((b) => (!mineNow(b) ? b : (b.rev || 0) !== rev ? { ...b, status: 'waiting' } : { ...b, status: 'ready', report, error: null, retryAt: 0 })));
       } catch (e) {
         const d = describeError(e);
-        const later = ['ratelimit', 'network', 'server'].includes(e.kind);
+        const later = ['ratelimit', 'network', 'server', 'timeout'].includes(e.kind);
         const retryAt = later ? Date.now() + Math.max(30, Math.min(900, e.retryAfter || 60)) * 1000 : 0;
         await updateBugs((l) => l.map((b) => (!mineNow(b) ? b : { ...b, status: later ? 'waiting' : 'failed', retryAt, error: { kind: e.kind || 'provider', title: d.title, body: d.body, detail: e.detail || e.message || '' } })));
         if (later) { queueTimer = setTimeout(runQueue, retryAt - Date.now() + 500); break; }
