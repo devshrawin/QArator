@@ -1,5 +1,7 @@
 // QArator settings page. Edits a copy of the settings and autosaves.
-import { loadSettings, saveSettings, normalize, exportFormat, importFormat, DEFAULTS, PROVIDERS, LAYOUTS, SEGMENTS, APPEARANCE, slug } from '../lib/settings.js';
+import { loadSettings, saveSettings, normalize, exportFormat, DEFAULTS, PROVIDERS, LAYOUTS, SEGMENTS, APPEARANCE, slug } from '../lib/settings.js';
+import { listProjects, switchProject, addProject, newProject, renameProject, deleteProject } from '../lib/projects.js';
+import { buildGuide } from '../lib/guide.js';
 import { listModels, describeError, rankModels, cooldowns, parseSlot, AUTO } from '../lib/ai.js';
 import { summarize, parsePrices, rowCost, rupees, nextQuotaReset, istClock, usedToday, limitFor, parseLimits } from '../lib/usage.js';
 import { buildTitle } from '../lib/report.js';
@@ -7,8 +9,8 @@ import { esc, icon, beam, orb, markSvg, applyTheme, applyAppearance, watchTheme,
 
 const $ = (s, r = document) => r.querySelector(s);
 const main = $('#main');
-let S;
-let keyShown = false, modelStatus = null, undoImport = null, undoTimer = 0, keyTimer = 0;
+let S, P = [], importNotes = null;
+let keyShown = false, modelStatus = null, keyTimer = 0;
 let U = { usage: {}, learnedLimits: {}, cool: {} }, usageDays = 1;
 
 // ---------- saving ----------
@@ -127,6 +129,31 @@ function secUsage() {
 async function loadUsage() {
   const { usage = {}, learnedLimits = {} } = await chrome.storage.local.get(['usage', 'learnedLimits']);
   U = { usage, learnedLimits, cool: await cooldowns() };
+}
+
+// ---------- projects ----------
+function secProjects() {
+  const rows = P.map((p) => `<div class="prow${p.active ? ' on' : ''}">
+    <span class="pdot" aria-hidden="true">${p.active ? icon.check : ''}</span>
+    ${B(`<input class="field" data-pj-name="${esc(p.id)}" aria-label="Project name" value="${esc(p.name)}">`)}
+    <span class="hint pmeta">${p.scopes ? `${p.scopes} portal${p.scopes === 1 ? '' : 's'}` : ''}</span>
+    ${p.active ? '<span class="hint">In use</span>' : `<button type="button" class="btn b-sec b-sm" data-act="pj-use" data-id="${esc(p.id)}">Use</button>`}
+    <button type="button" class="ib" data-act="pj-del" data-id="${esc(p.id)}" aria-label="Delete ${esc(p.name)}" ${P.length < 2 ? 'disabled' : ''}>${icon.x}</button></div>`).join('');
+  const notes = importNotes ? `<div class="notes" role="status"><strong>${esc(importNotes.title)}</strong>${importNotes.items.length ? `<ul>${importNotes.items.map((x) => `<li>${esc(x)}</li>`).join('')}</ul><div class="hint">Anything listed was repaired on import. Fix it in the sections below, or send this list back to your AI agent.</div>` : ''}</div>` : '';
+  return `<section class="sec" id="projects">
+  <div><h2>Projects</h2><p class="desc">A project is a saved setup: title format, sections, fields, tags and portals. Keep one per team or product, and switch in the panel. Your AI key and look stay yours.</p></div>
+  <div>${rows}</div>
+  ${notes}
+  <div class="row">
+    <button type="button" class="btn b-pri" data-act="import">${icon.upload}Import a project file</button>
+    <button type="button" class="btn b-sec" data-act="pj-new">${icon.plus}New blank project</button>
+    <button type="button" class="btn b-sec" data-act="export">${icon.download}Export this project</button>
+    <button type="button" class="btn b-ghost" data-act="reset">Reset this project to the neutral setup</button>
+  </div>
+  <div class="guide-box"><strong>Setting up a new platform (Jira, Confluence, Zoho, anything)?</strong>
+    <p class="desc" style="margin:4px 0 8px">Download the setup guide, give it to any AI agent together with a screenshot or description of your bug form and a sample report, and import the file it writes.</p>
+    <button type="button" class="btn b-sec" data-act="guide">${icon.download}Download setup guide (.md)</button></div>
+  </section>`;
 }
 
 function secLength() {
@@ -270,16 +297,22 @@ function secAppearance() {
   </section>`;
 }
 
-function secShare() {
-  return `<section class="sec" id="share">
-  <div><h2>Export and import</h2><p class="desc">Share one format across the team: title format, URL rules, sections, fields, tags, Zoho labels and the style example. Your API key is never exported.</p></div>
-  <div class="row">
-    <button type="button" class="btn b-pri" data-act="export">${icon.download}Export format</button>
-    <button type="button" class="btn b-sec" data-act="import">${icon.upload}Import format</button>
-    <button type="button" class="btn b-ghost" data-act="reset">Reset to defaults</button>
-    ${undoImport ? '<button type="button" class="btn b-sec" data-act="undo-import">Undo import</button>' : ''}
-  </div>
-  <p class="hint" style="margin:0">Exports as <span class="mono">qarator-format-${esc(slug(S.title.project || 'team'))}.json</span>. Importing replaces the current format; you can undo it for 30 seconds.</p>
+function secScopes() {
+  const sc = (S.meta.scopes || []).map((x, i) => `<div class="scope">
+    <div class="g2">
+      <div><label class="lbl" for="sc-n${i}">Portal or area name</label>${B(`<input id="sc-n${i}" class="field" data-sc="${i}" data-k="name" value="${esc(x.name)}">`)}</div>
+      <div><label class="lbl" for="sc-m${i}">Applies when the page address contains</label>${B(`<input id="sc-m${i}" class="field mono" data-sc="${i}" data-k="match" value="${esc(x.match)}" placeholder="admin.example.com or /orders">`)}</div>
+      <div><label class="lbl" for="sc-c${i}">Project code in the title <span class="hint">blank = same as the project</span></label>${B(`<input id="sc-c${i}" class="field" data-sc="${i}" data-k="code" value="${esc(x.override?.title?.project || '')}">`)}</div>
+      <div><label class="lbl" for="sc-t${i}">Tags for this portal <span class="hint">one per line, blank = the project's tags</span></label>${B(`<textarea id="sc-t${i}" class="field" rows="3" data-sc="${i}" data-k="tags">${esc((x.override?.tags?.list || []).join('\n'))}</textarea>`)}</div>
+    </div>
+    <div class="row"><span class="hint">${esc(['sections', 'fields', 'urlRules', 'styleExample'].filter((k) => x.override?.[k] != null && (!Array.isArray(x.override[k]) || x.override[k].length)).map((k) => ({ sections: 'its own sections', fields: 'field changes', urlRules: 'its own page names', styleExample: 'its own style example' })[k]).join(', ') || 'No other overrides')}</span><span class="grow"></span>
+      <button type="button" class="btn b-ghost b-sm" data-act="sc-del" data-i="${i}">${icon.x}Remove portal</button></div></div>`).join('');
+  return `<section class="sec" id="scopes">
+  <div><h2>Where this project applies</h2><p class="desc">The sites this project is for, and the portals or areas within them that differ. When a page matches a portal, its settings go on top of the project's. The longer match wins.</p></div>
+  <div><label class="lbl" for="sites">Sites <span class="hint">one per line; QArator switches to this project on these sites</span></label>${B(`<textarea id="sites" class="field mono" rows="3" data-sites="1" placeholder="app.example.com">${esc((S.meta.sites || []).join('\n'))}</textarea>`)}</div>
+  ${sc || '<div class="hint">No portals. Add one when part of the site needs its own tags, title code or page names.</div>'}
+  <div class="row"><button type="button" class="btn b-ghost" data-act="sc-add" style="margin-left:-8px">${icon.plus}Add portal or area</button>
+    <span class="hint">Sections, field changes and page names per portal come from the project file.</span></div>
   </section>`;
 }
 
@@ -287,9 +320,9 @@ function render() {
   const y = scrollY;
   const a = document.activeElement;
   const keep = a && a.id && main.contains(a) ? { id: a.id, s: a.selectionStart, e: a.selectionEnd } : null;
-  main.innerHTML = secAI() + secLength() + secUsage() + secAppearance()
-    + `<details class="adv" id="advanced"${advOpen ? ' open' : ''}><summary><span class="adv-t">Team format and Zoho</span><span class="adv-d">Title format, sections, fields, tags, Zoho labels, export and import. The team defaults already work; open this only to change them.</span></summary>`
-    + secTitle() + secSections() + secFields() + secTags() + secStyle() + secZoho() + secShare() + '</details>';
+  main.innerHTML = secAI() + secProjects() + secLength() + secUsage() + secAppearance()
+    + `<details class="adv" id="advanced"${advOpen ? ' open' : ''}><summary><span class="adv-t">Format of this project</span><span class="adv-d">Where it applies, portals, title format, sections, fields, tags and Zoho labels. Everything the setup file sets can be changed here.</span></summary>`
+    + secScopes() + secTitle() + secSections() + secFields() + secTags() + secStyle() + secZoho() + '</details>';
   applyTheme();
   scrollTo(0, y);
   if (keep) {
@@ -315,7 +348,18 @@ document.addEventListener('click', (e) => {
   e.preventDefault(); openAdvanced(t); t.scrollIntoView(); history.replaceState(null, '', a.getAttribute('href'));
 });
 document.addEventListener('input', (e) => {
-  const el = e.target; const path = el.dataset.path;
+  const el = e.target;
+  if (el.dataset.sites) { S.meta.sites = String(el.value).split('\n').map((x) => x.trim()).filter(Boolean); save(); return; }
+  if (el.dataset.sc !== undefined) {
+    const x = S.meta.scopes[Number(el.dataset.sc)]; if (!x) return;
+    const k = el.dataset.k, v = el.value;
+    x.override = x.override || {};
+    if (k === 'name' || k === 'match') x[k] = v;
+    else if (k === 'code') { if (v.trim()) x.override.title = { ...(x.override.title || {}), project: v.trim() }; else if (x.override.title) { delete x.override.title.project; if (!Object.keys(x.override.title).length) delete x.override.title; } }
+    else if (k === 'tags') { const list = v.split('\n').map((t) => t.trim()).filter(Boolean); if (list.length) x.override.tags = { ...(x.override.tags || {}), list }; else if (x.override.tags) { delete x.override.tags.list; if (!Object.keys(x.override.tags).length) delete x.override.tags; } }
+    save(); return;
+  }
+  const path = el.dataset.path;
   if (!path) return;
   let v = el.type === 'checkbox' ? el.checked : el.value;
   if (el.dataset.type === 'number') v = Number(v) || 0;
@@ -334,6 +378,7 @@ document.addEventListener('input', (e) => {
 });
 document.addEventListener('change', (e) => {
   const el = e.target;
+  if (el.dataset.pjName) { renameProject(el.dataset.pjName, el.value).then(refreshProjects); return; }
   if (el.id === 'import-file') return doImport(el);
   if (!el.dataset.path) return;
   if (el.dataset.path === 'ai.provider') { S.ai.models = []; S.ai.model = AUTO; save(); render(); return; }
@@ -384,12 +429,24 @@ document.addEventListener('click', async (e) => {
       await chrome.storage.local.remove(['usage', 'learnedLimits', 'modelCooldown']);
       await loadUsage(); render(); return;
     case 'export': return doExport();
+    case 'guide': return downloadText('qarator-setup-guide.md', buildGuide(), 'text/markdown');
+    case 'pj-use': await flush(); await switchProject(b.dataset.id); await reloadAll(); toast('Project switched'); return;
+    case 'pj-new': {
+      const name = prompt('Name of the new project'); if (!name || !name.trim()) return;
+      await flush(); await newProject(name); await reloadAll(); toast('Project created. It starts with the neutral setup.', 3000); return;
+    }
+    case 'pj-del': {
+      const p = P.find((x) => x.id === b.dataset.id); if (!p) return;
+      if (!confirm(`Delete the project “${p.name}”? Export it first if you may need it again. Your AI key is not affected.`)) return;
+      await flush(); await deleteProject(p.id); await reloadAll(); toast('Project deleted'); return;
+    }
+    case 'sc-add': { let id = 'portal', n = 1; while (S.meta.scopes.some((x) => x.id === id)) id = `portal_${++n}`; S.meta.scopes.push({ id, name: 'New portal', match: '', override: {} }); break; }
+    case 'sc-del': S.meta.scopes.splice(i, 1); break;
     case 'import': return $('#import-file').click();
     case 'reset': {
-      if (!confirm('Reset the whole format to the defaults? Your API key is kept.')) return;
-      const keep = S.ai, look = S.appearance; S = normalize(JSON.parse(JSON.stringify(DEFAULTS))); S.ai = keep; S.appearance = look; break;
+      if (!confirm('Reset this project to the neutral setup? Its sections, fields, tags and portals are cleared. Your AI key is kept.')) return;
+      const keep = { ai: S.ai, look: S.appearance, usage: S.usage, meta: { ...S.meta, scopes: [], sites: [] } }; S = normalize(JSON.parse(JSON.stringify(DEFAULTS))); S.ai = keep.ai; S.appearance = keep.look; S.usage = keep.usage; S.meta = keep.meta; break;
     }
-    case 'undo-import': S = undoImport; undoImport = null; clearTimeout(undoTimer); toast('Import undone'); break;
     default: return;
   }
   save(); render();
@@ -413,27 +470,41 @@ async function checkKey() {
   render();
 }
 
-function doExport() {
-  const data = JSON.stringify(exportFormat(S), null, 2);
-  const url = URL.createObjectURL(new Blob([data], { type: 'application/json' }));
+function downloadText(name, text, type) {
+  const url = URL.createObjectURL(new Blob([text], { type }));
   const a = document.createElement('a');
-  a.href = url; a.download = `qarator-format-${slug(S.title.project || 'team')}.json`;
+  a.href = url; a.download = name;
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 2000);
 }
+function doExport() {
+  downloadText(`qarator-format-${slug(S.meta.name || S.title.project || 'project')}.json`, JSON.stringify(exportFormat(S), null, 2), 'application/json');
+}
+
+// Pending edits are saved before a project operation reads or switches the stored settings.
+async function flush() { clearTimeout(t); await saveSettings(S); }
+async function refreshProjects() { P = await listProjects(); render(); }
+async function reloadAll() { S = await loadSettings(); P = await listProjects(); render(); }
+
 async function doImport(el) {
   const f = el.files[0]; el.value = '';
   if (!f) return;
+  let json;
+  try { json = JSON.parse(await f.text()); } catch (e) { toast('That file is not valid JSON.', 3500); return; }
   try {
-    const json = JSON.parse(await f.text());
-    const next = importFormat(S, json);
-    undoImport = JSON.parse(JSON.stringify(S));
-    S = next; save(); render();
-    toast('Format imported. Undo is available for 30 seconds.', 3000);
-    clearTimeout(undoTimer);
-    undoTimer = setTimeout(() => { undoImport = null; render(); }, 30000);
+    await flush();
+    const same = P.find((x) => x.id === json?.meta?.id);
+    const update = !!same && confirm(`A project called “${same.name}” is already here.\n\nOK: update it with this file (your edits to it are replaced).\nCancel: add the file as a separate copy.`);
+    const r = await addProject(json, { replace: update ? same.id : '' });
+    await reloadAll();
+    importNotes = { title: `${update ? 'Updated' : 'Imported'} “${r.name}”${r.warnings.length ? `, with ${r.warnings.length} thing${r.warnings.length === 1 ? '' : 's'} to check` : ''}.`, items: r.warnings };
+    render();
+    toast(`${update ? 'Updated' : 'Imported'} “${r.name}”`, 2800);
+    document.getElementById('projects')?.scrollIntoView();
   } catch (e) {
-    toast(e instanceof SyntaxError ? 'That file is not valid JSON.' : e.message, 3500);
+    importNotes = { title: 'The file was not imported.', items: String(e.message).split(/(?<=\.)\s+(?=["A-Z])/) };
+    render();
+    document.getElementById('projects')?.scrollIntoView();
   }
 }
 
@@ -449,6 +520,7 @@ addEventListener('scroll', navSpy, { passive: true });
 (async function start() {
   $('#mark').innerHTML = markSvg(24);
   S = await loadSettings();
+  P = await listProjects();
   applyAppearance(S);
   await loadUsage();
   render();

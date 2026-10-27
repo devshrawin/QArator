@@ -1,6 +1,8 @@
 // First-run setup: one thing to do (paste an AI key, tested as it is pasted), then how to capture.
 // The team format ships as the default; changing it lives in Settings. Every answer is saved as it is given.
-import { loadSettings, saveSettings, normalize, importFormat, PROVIDERS } from '../lib/settings.js';
+import { loadSettings, saveSettings, normalize, PROVIDERS } from '../lib/settings.js';
+import { addProject } from '../lib/projects.js';
+import { buildGuide } from '../lib/guide.js';
 import { listModels, rankModels, describeError, AUTO } from '../lib/ai.js';
 import { esc, icon, beam, orb, markSvg, applyTheme, applyAppearance, watchTheme, toast } from '../lib/ui.js';
 
@@ -46,7 +48,7 @@ function keyStep() {
     ${link ? `<a href="${link[0]}" target="_blank" rel="noopener" class="hint" style="color:var(--ink)">${esc(link[1])} ${icon.external}</a>` : ''}
     <div class="row"><button type="button" class="btn b-sec" data-go="test" ${st === 'busy' ? 'aria-disabled="true"' : ''}>${st === 'busy' ? orb('connecting', 20) + 'Testing…' : 'Test key'}</button>
       <span role="status" aria-live="polite" id="key-status">${st && st !== 'busy' ? `<span class="status ${st.ok ? 'ok' : 'bad'}">${st.ok ? icon.check : icon.alert}${esc(st.text)}</span>` : ''}</span></div>
-    <div class="hint">Got a team format file? <button type="button" class="btn b-ghost b-sm" data-go="import" style="height:auto;padding:0 6px">Import it</button> Otherwise the team defaults are already in place.</div>
+    <div class="hint">Got a project file from your team? <button type="button" class="btn b-ghost b-sm" data-go="import" style="height:auto;padding:0 6px">Import it</button> Using a different bug tracker? <button type="button" class="btn b-ghost b-sm" data-go="guide" style="height:auto;padding:0 6px">Download the setup guide</button> and give it to an AI agent with your form; it writes the file for you.</div>
     ${nav('Next', { skip: st && st.ok ? '' : 'Do this later' })}</div>`;
 }
 
@@ -103,6 +105,12 @@ document.addEventListener('click', async (e) => {
   if (step === 0) readKeyFields();
   if (go === 'test') return testKey();
   if (go === 'import') return $('#import-file').click();
+  if (go === 'guide') {
+    const url = URL.createObjectURL(new Blob([buildGuide()], { type: 'text/markdown' }));
+    const a = document.createElement('a'); a.href = url; a.download = 'qarator-setup-guide.md'; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+    return;
+  }
   if (go === 'panel') {
     const win = await chrome.windows.getCurrent();
     return chrome.sidePanel.open({ windowId: win.id }).catch(() => toast('Click the QArator icon in the toolbar to open the panel.', 3200));
@@ -127,8 +135,8 @@ document.addEventListener('change', async (e) => {
   if (t.id === 'import-file') {
     const f = t.files[0]; t.value = '';
     if (!f) return;
-    try { S = importFormat(await loadSettings(), JSON.parse(await f.text())); await saveSettings(S); toast('Format imported'); render(); }
-    catch (err) { toast(err instanceof SyntaxError ? 'That file is not valid JSON.' : err.message, 3500); }
+    try { const r = await addProject(JSON.parse(await f.text())); S = await loadSettings(); toast(`Imported “${r.name}”${r.warnings.length ? `, ${r.warnings.length} thing${r.warnings.length === 1 ? '' : 's'} to check in Settings` : ''}`, 3200); render(); }
+    catch (err) { toast(err instanceof SyntaxError ? 'That file is not valid JSON.' : err.message, 4500); }
   }
 });
 // A pasted key is tested on its own after a short pause; no need to find the button.

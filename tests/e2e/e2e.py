@@ -130,9 +130,6 @@ try:
               await chrome.storage.local.set({ settings: s });
             }""", patch)
 
-        # the team's format (what a tester imports once): the defaults themselves are neutral
-        team = json.load(open(os.path.join(HERE, "team-format.json"), encoding="utf-8"))
-        set_settings({k: team[k] for k in ("title", "urlRules", "sections", "fields", "tags", "styleExample")})
 
         # ---- site under test in window W1
         def welcome_opened():
@@ -206,9 +203,18 @@ try:
             wz.wait_for_selector("text=All set")
             ob = sw.evaluate("async () => (await chrome.storage.local.get(['onboarded', 'settings']))")
             check("setup: finish saves onboarded + key + Auto", ob.get("onboarded") and ob["settings"]["ai"]["apiKey"] == "test-gemini-key-000000000000" and ob["settings"]["ai"]["model"] == "auto", str(ob["settings"]["ai"])[:200])
+            st0 = ob["settings"]
+            check("setup: the built-in setup is neutral", st0["tags"]["list"] == [] and st0["urlRules"] == [] and st0["title"]["project"] == "APP" and [f["id"] for f in st0["fields"]] == ["severity", "priority", "classification"], str([st0["title"]["project"], len(st0["tags"]["list"])]))
             panel.wait_for_timeout(500)
             check("setup: card gone after setup", "Set up QArator" not in panel.inner_text("#main"))
         phase(onboarding)
+        # the built-in setup is neutral; the rest of the run uses the UR team format, as a team would import it
+        FORMAT = json.load(open(os.path.join(HERE, "ur-format.json"), encoding="utf-8"))
+        sw.evaluate("""async (f) => {
+          const { settings = {} } = await chrome.storage.local.get('settings');
+          const { qarator, formatVersion, ...rest } = f;
+          await chrome.storage.local.set({ settings: { ...settings, ...rest } });
+        }""", FORMAT)
         set_settings({"ai": {"provider": "gemini", "apiKey": "test-gemini-key", "model": "gemini-2.5-flash", "baseUrl": ""}})
         panel.wait_for_timeout(300)
 
@@ -827,19 +833,113 @@ try:
                 op.click("[data-act=export]")
             path = dl.value.path()
             data = json.load(open(path, encoding="utf-8"))
-            check("export: file name + no API key", dl.value.suggested_filename == "qarator-format-ur2.json" and "apiKey" not in data["ai"] and "sk-test" not in json.dumps(data), dl.value.suggested_filename)
+            check("export: file name + no API key", dl.value.suggested_filename == "qarator-format-ur.json" and "ai" not in data and "usage" not in data and "appearance" not in data and "sk-test" not in json.dumps(data), dl.value.suggested_filename)
             data["title"]["project"] = "IMPORTED"
             imp = os.path.join(OUT, "import.json"); json.dump(data, open(imp, "w"))
+            rows0 = op.locator(".prow").count()
             op.set_input_files("#import-file", imp)
             op.wait_for_timeout(800)
             check("import: applies format, keeps key", op.input_value("#tproj") == "IMPORTED" and op.input_value("#key") == "sk-test-0000000000000000000000")
-            check("import: undo button offered", op.locator("[data-act=undo-import]").count() == 1)
+            check("import: same project id is added as a copy, not over the original", op.locator(".prow").count() == rows0 + 1, f"{rows0} -> {op.locator('.prow').count()}")
+            check("import: existing project is still there", "UR" in op.locator(".prow input").first.input_value() or op.locator(".prow input").count() == 2)
             bad = os.path.join(OUT, "bad.json"); open(bad, "w").write("{\"x\":1}")
             op.set_input_files("#import-file", bad)
             op.wait_for_timeout(500)
-            check("import: rejects non-QArator file", op.input_value("#tproj") == "IMPORTED")
+            check("import: rejects non-QArator file with a plain reason", op.input_value("#tproj") == "IMPORTED" and "not imported" in op.inner_text("#projects") and "qarator" in op.inner_text("#projects"), op.inner_text("#projects")[:160])
             op.screenshot(path=os.path.join(OUT, "07-options.png"))
         phase(options_page)
+
+        def projects_phase():
+            op = ctx.new_page()
+            op.on("pageerror", lambda e: logs.append(f"[projects] PAGEERROR: {e}"))
+            op.goto(f"chrome-extension://{EID}/options/options.html#projects")
+            op.wait_for_timeout(800)
+            ev = lambda js, arg=None: op.evaluate(js, arg)
+            # the setup guide: downloads, and its example is a valid project file
+            with op.expect_download() as dl:
+                op.click("[data-act=guide]")
+            guide = open(dl.value.path(), encoding="utf-8").read()
+            check("guide: downloads as qarator-setup-guide.md", dl.value.suggested_filename == "qarator-setup-guide.md" and guide.startswith("# QArator setup guide"), dl.value.suggested_filename)
+            check("guide: asks the agent the right questions and states the rules", "Ask first" in guide and "meta.scopes" in guide and "Never put keys" in guide)
+            ex = json.loads(guide.split("```json\n", 1)[1].split("\n```", 1)[0])
+            ex_path = os.path.join(OUT, "guide-example.json"); json.dump(ex, open(ex_path, "w"))
+            rows0 = op.locator(".prow").count()
+            op.set_input_files("#import-file", ex_path)
+            op.wait_for_timeout(900)
+            check("guide: its example imports with nothing to repair", op.locator(".prow").count() == rows0 + 1 and "to check" not in op.inner_text("#projects") and "Imported" in op.inner_text("#projects"), op.inner_text("#projects")[:200])
+            check("projects: the imported project is in use", ev("async () => (await chrome.storage.local.get('settings')).settings.meta.id") == "acme_shop")
+            # portals: the right one applies by address, a longer match wins, personal settings never move
+            r = ev("""async () => {
+              const m = await import('/lib/settings.js');
+              const s = m.normalize((await chrome.storage.local.get('settings')).settings);
+              const a = m.applyScope(s, 'https://admin.acme.example/orders/7');
+              const b = m.applyScope(s, 'https://shop.acme.example/checkout');
+              const none = m.applyScope(s, 'https://elsewhere.example/');
+              return { a: [a.scope, a.title.project, a.tags.list.length, a.urlRules.length], b: [b.scope, b.fields.map((f) => f.id).join(), b.tags.list.join('|')], none: [none.scope, none.tags.list.length, none.title.project], ai: s.ai.provider };
+            }""")
+            check("portals: admin address applies the admin portal", r["a"] == ["Admin site", "ACME", 3, 2], str(r["a"]))
+            check("portals: shop portal adds a field and its own tags", r["b"][0] == "Customer shop" and r["b"][1].endswith("device") and r["b"][2].startswith("Shop"), str(r["b"]))
+            check("portals: an unmatched address uses the project as it is", r["none"][0] == "" and r["none"][1] == 0, str(r["none"]))
+            # the project settings are editable by hand: sites and a portal
+            op.reload(); op.wait_for_timeout(800)
+            op.click("#advanced > summary")
+            check("portals: editor lists both portals", op.locator(".scope").count() == 2, str(op.locator(".scope").count()))
+            op.fill("#sc-c1", "SHOP")
+            op.fill("#sites", "shop.acme.example\nadmin.acme.example\nstaging.acme.example")
+            op.wait_for_timeout(700)
+            sv = ev("async () => (await chrome.storage.local.get('settings')).settings.meta")
+            check("portals: hand edits are saved", sv["scopes"][1]["override"]["title"]["project"] == "SHOP" and len(sv["sites"]) == 3, str(sv)[:200])
+            op.click("[data-act=sc-add]"); op.wait_for_timeout(300)
+            check("portals: a new portal can be added by hand", op.locator(".scope").count() == 3)
+            op.click("[data-act=sc-del][data-i='2']"); op.wait_for_timeout(300)
+            check("portals: and removed", op.locator(".scope").count() == 2)
+            # switching: the panel switches too, and the shelf keeps every project's own edits
+            auto = ev("""async () => { const p = await import('/lib/projects.js'); return [await p.projectForUrl('https://staging.acme.example/x'), await p.projectForUrl('https://nowhere.example/')]; }""")
+            check("projects: a page on a project's site finds that project", auto[0] == "acme_shop" and auto[1] == "", str(auto))
+            op.reload(); op.wait_for_timeout(800)
+            ur = [i for i in range(op.locator("[data-act=pj-use]").count())]
+            op.locator("[data-act=pj-use]").first.click(); op.wait_for_timeout(900)
+            now = ev("async () => (await chrome.storage.local.get('settings')).settings.meta.id")
+            check("projects: Use switches the project in use", now != "acme_shop", now)
+            back = ev("async () => { const p = await import('/lib/projects.js'); await p.switchProject('acme_shop'); return (await chrome.storage.local.get('settings')).settings.meta.scopes[1].override.title.project; }")
+            check("projects: switching back keeps hand edits", back == "SHOP", back)
+            check("projects: switching leaves AI key and look alone", ev("async () => (await chrome.storage.local.get('settings')).settings.ai.apiKey") != "")
+            # a bad file says what is wrong in plain words
+            bad = os.path.join(OUT, "bad-format.json")
+            json.dump({"qarator": "format", "sections": {}, "fields": "x"}, open(bad, "w"))
+            op.set_input_files("#import-file", bad); op.wait_for_timeout(600)
+            t = op.inner_text("#projects")
+            check("import errors: say which key is wrong", "not imported" in t and "\"sections\" must be a list" in t and "\"fields\" must be a list" in t, t[:240])
+            warn = os.path.join(OUT, "warn-format.json")
+            json.dump({"qarator": "format", "meta": {"id": "warny", "name": "Warny"}, "fields": [{"name": "X", "options": []}, {"id": "a", "name": "Y", "options": ["p"], "default": "z"}]}, open(warn, "w"))
+            op.set_input_files("#import-file", warn); op.wait_for_timeout(900)
+            t = op.inner_text("#projects")
+            check("import warnings: list what was repaired", "2 things to check" in t and "fields[0].options is empty" in t and "fields[1].default" in t, t[:300])
+            op.screenshot(path=os.path.join(OUT, "12-projects.png"))
+            # delete a project, and the last one cannot be deleted
+            before = op.locator(".prow").count()
+            op.once("dialog", lambda d: d.accept())
+            op.locator("[data-act=pj-del]:not([disabled])").last.click(); op.wait_for_timeout(900)
+            check("projects: delete removes one", op.locator(".prow").count() == before - 1, f"{before} -> {op.locator('.prow').count()}")
+            # neutral new project
+            op.once("dialog", lambda d: d.accept("Fresh"))
+            op.click("[data-act=pj-new]"); op.wait_for_timeout(900)
+            neu = ev("async () => { const s = (await chrome.storage.local.get('settings')).settings; return [s.meta.name, s.tags.list.length, s.urlRules.length, s.title.project]; }")
+            check("projects: New blank project starts neutral", neu[0] == "Fresh" and neu[1] == 0 and neu[2] == 0 and neu[3] == "APP", str(neu))
+            # the panel header switches projects
+            pg = ctx.new_page()
+            pg.goto(f"chrome-extension://{EID}/sidepanel/sidepanel.html"); pg.wait_for_timeout(1000)
+            check("panel: project switcher shows with several projects", pg.locator("#projsel").count() == 1 and pg.locator("#projsel option").count() >= 3, str(pg.locator("#projsel option").all_inner_texts()))
+            pg.select_option("#projsel", "acme_shop"); pg.wait_for_timeout(900)
+            check("panel: choosing a project switches it", ev("async () => (await chrome.storage.local.get('settings')).settings.meta.id") == "acme_shop")
+            pg.close()
+            # restore the UR setup for the phases that follow
+            sw.evaluate("""async (f) => {
+              const { settings = {} } = await chrome.storage.local.get('settings');
+              const { qarator, formatVersion, ...rest } = f;
+              await chrome.storage.local.set({ settings: { ...settings, ...rest } });
+            }""", FORMAT)
+        phase(projects_phase)
 
         def appearance():
             op = ctx.new_page()

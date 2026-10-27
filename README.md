@@ -17,10 +17,10 @@ Edge works the same way at `edge://extensions`.
 A setup page opens when QArator is installed (it can be run again from Settings › **Run setup again**):
 
 1. **Connect an AI provider**: Google Gemini is selected by default (free key from Google AI Studio); Anthropic, OpenAI or an OpenAI-compatible endpoint also work. **Test key** checks it and shows which models Auto will use.
-2. **Your team's format**: import a teammate's format file, or set the project code (default `UR`) and your Zoho Projects address (**Find it from an open Zoho tab** fills it in).
+2. **Your team's setup**: QArator starts neutral. Import your team's project file (Settings › Projects), or download the **setup guide**, give it with a description of your bug form to any AI agent, and import the file it writes.
 3. **Try it**: shortcuts and pinning.
 
-Everything else (sections, fields, tags, Zoho labels, style example) is in Settings. **Export format** shares the setup with the team; the API key is never exported.
+Everything else (sections, fields, tags, Zoho labels, style example, portals) is in Settings › Format of this project, and is editable after an import. **Export this project** shares it with the team; keys are never exported. Several projects can live side by side and you switch in the panel.
 
 ## Models: Auto
 

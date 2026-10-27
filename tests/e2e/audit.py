@@ -179,7 +179,7 @@ with sync_playwright() as p:
         op.goto(f"chrome-extension://{EID}/options/options.html"); op.wait_for_timeout(1000)
         ut = op.inner_text("#usage")
         check("upgrade: 1.1-style usage rows (3-part keys) still shown", "gemini-2.5-flash" in ut and " 5" in ut.replace("\t", " "), ut[:300].replace(chr(10), " | "))
-        check("upgrade: settings page renders all sections", all(op.locator(f"#{s}").count() == 1 for s in ["ai", "title", "fields", "zoho", "usage", "share"]))
+        check("upgrade: settings page renders all sections", all(op.locator(f"#{s}").count() == 1 for s in ["ai", "title", "fields", "zoho", "usage", "projects", "scopes"]))
         op.close()
         panel.click("[data-action=back-capture]") if panel.locator("[data-action=back-capture]").count() else None
         panel.click("[data-action=reset]") if panel.locator("[data-action=reset]").count() else None

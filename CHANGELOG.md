@@ -1,6 +1,11 @@
 # Changelog
 
 ## Unreleased
+- **Projects**: a project is a saved setup (title format, sections, fields, tags, Zoho labels, portals). Keep one per team or product; switch in the panel header or in Settings › Projects. Import adds a project (a file with an id you already have is added as a copy, or updates it if you say so); Export saves one; AI key, usage and look stay per person.
+- **Portals and areas** inside a project: each has an address match and overrides only what differs (tags, title code, sections, fields, page names, style). Every matching portal applies, the longer match last. Editable in Settings › Format of this project › Sites and portals. A page on a project's site switches to that project.
+- **Neutral built-in setup**: a new install has no client names, tags or URL rules (project APP; Severity, Priority, Classification). Import a project file to get a team's setup. Existing installs keep what they have.
+- **Setup guide** (Settings › Projects, and the setup page): a Markdown file to hand, with a description of any bug tracker, to an AI agent that writes the project file (Zoho, Jira, Confluence, anything; QArator fills Zoho forms and offers Copy for the rest).
+- **Plain import errors**: a file that cannot be read says which key is wrong; things repaired on import are listed so they can be fixed or sent back to the agent.
 - **Tag picker**: tick as many team tags as fit from a searchable list (grouped Citizen / Department / Other); ticked tags show as chips with a cross. Enter ticks the top match. Only tags from the team list can be chosen; the free-text tag box is gone.
 - **The AI suggests tags from the team list only**, judged by the page URL and the bug (usually the portal tag and the module tag), and returns none when nothing fits.
 - **The team tag list ships complete** (41 tags from the exported issue list; spelling variants merged). A saved copy of the old 2-tag list is upgraded automatically.

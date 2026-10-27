@@ -1,0 +1,270 @@
+{
+  "qarator": "format",
+  "formatVersion": 2,
+  "writingLength": "standard",
+  "title": {
+    "segments": [
+      "project",
+      "portal",
+      "module",
+      "page",
+      "summary"
+    ],
+    "project": "UR",
+    "separator": " | ",
+    "maxLength": 150,
+    "summaryCase": "title"
+  },
+  "urlRules": [
+    {
+      "match": "unifiedregistry-department-portal",
+      "portal": "Department Portal",
+      "module": "",
+      "page": ""
+    },
+    {
+      "match": "/department/sevidashboard",
+      "portal": "",
+      "module": "SEVI Dashboard",
+      "page": ""
+    }
+  ],
+  "sections": [
+    {
+      "id": "url_note",
+      "name": "URL",
+      "layout": "inline",
+      "include": true,
+      "guide": "Only a short note on which module or workspace on this URL is affected, e.g. \"Specifically affects the SEVI State Overview module workspace\". The URL itself is added automatically; do not repeat it."
+    },
+    {
+      "id": "summary",
+      "name": "Summary",
+      "layout": "inline",
+      "include": true,
+      "guide": "Two or three sentences: what the user did, what went wrong and where. Plain and specific."
+    },
+    {
+      "id": "issue_details",
+      "name": "Issue Details",
+      "layout": "paragraph",
+      "include": true,
+      "guide": "One intro line that names the screenshot file, then two or three short paragraphs, each starting with a label and a colon (e.g. \"Isolated Light Canvas Layout: ...\"). Describe exactly what is visible: components, colours, values, messages. Mention captured console errors if relevant. Separate paragraphs with a blank line."
+    },
+    {
+      "id": "steps",
+      "name": "Steps to Reproduce",
+      "layout": "numbered",
+      "include": true,
+      "guide": "Start from opening the portal and logging in. One action per step, using the labels shown on screen. The last step is the observation."
+    },
+    {
+      "id": "expected",
+      "name": "Expected Result",
+      "layout": "paragraph",
+      "include": true,
+      "guide": "What should happen, stated as a requirement."
+    },
+    {
+      "id": "actual",
+      "name": "Actual Result",
+      "layout": "paragraph",
+      "include": true,
+      "guide": "What happens instead, in one or two sentences, matching the screenshot."
+    }
+  ],
+  "fields": [
+    {
+      "id": "severity",
+      "name": "Severity",
+      "zohoLabel": "Severity",
+      "options": [
+        "None",
+        "Show stopper",
+        "Critical",
+        "Major",
+        "Minor"
+      ],
+      "default": "Minor",
+      "ai": true
+    },
+    {
+      "id": "priority",
+      "name": "Priority",
+      "zohoLabel": "Priority",
+      "options": [
+        "None",
+        "Low",
+        "Medium",
+        "High"
+      ],
+      "default": "Low",
+      "ai": true
+    },
+    {
+      "id": "classification",
+      "name": "Classification",
+      "zohoLabel": "Classification",
+      "options": [
+        "Issue",
+        "Functional",
+        "Security",
+        "Crash/Hang",
+        "Data loss",
+        "Performance",
+        "UI/Usabililty",
+        "UI/Usability",
+        "UI",
+        "Other bug",
+        "Feature(New)",
+        "Enhancement",
+        "Suggestion",
+        "New Requirement",
+        "Change Request",
+        "Backend"
+      ],
+      "default": "Issue",
+      "ai": true
+    },
+    {
+      "id": "test_phase",
+      "name": "Test Phase",
+      "zohoLabel": "Test Phase",
+      "options": [
+        "Smoke",
+        "System",
+        "Sanity",
+        "Functional",
+        "Regression",
+        "UAT"
+      ],
+      "default": "Smoke",
+      "ai": false
+    },
+    {
+      "id": "device_type",
+      "name": "Device Type",
+      "zohoLabel": "Device Type",
+      "options": [
+        "Web Application",
+        "Mobile",
+        "TOM",
+        "EFO",
+        "TVM",
+        "LTVM",
+        "SCS",
+        "AG",
+        "CC",
+        "HHD",
+        "TR"
+      ],
+      "default": "Web Application",
+      "ai": false
+    },
+    {
+      "id": "reproducible",
+      "name": "Reproducible",
+      "zohoLabel": "Reproducible|Is it reproducible",
+      "options": [
+        "None",
+        "Always",
+        "Sometimes",
+        "Rarely",
+        "Unable"
+      ],
+      "default": "Always",
+      "ai": false
+    },
+    {
+      "id": "flag",
+      "name": "Flag",
+      "zohoLabel": "Flag",
+      "options": [
+        "Internal",
+        "External"
+      ],
+      "default": "Internal",
+      "ai": false
+    },
+    {
+      "id": "assignee",
+      "name": "Assignee",
+      "zohoLabel": "Assignee|Assign To",
+      "options": [
+        "Unassigned"
+      ],
+      "default": "Unassigned",
+      "ai": false
+    }
+  ],
+  "tags": {
+    "list": [
+      "UR",
+      "UR - Citizen Portal",
+      "UR - Citizen Portal - About Us",
+      "UR - Citizen Portal - Bank Details",
+      "UR - Citizen Portal - CitizenAssist",
+      "UR - Citizen Portal - Consent Management",
+      "UR - Citizen Portal - Contact Us",
+      "UR - Citizen Portal - FAQs",
+      "UR - Citizen Portal - Family Details",
+      "UR - Citizen Portal - Gallery",
+      "UR - Citizen Portal - Home",
+      "UR - Citizen Portal - Landing Page",
+      "UR - Citizen Portal - Mobile",
+      "UR - Citizen Portal - My Dashboard",
+      "UR - Citizen Portal - My Information",
+      "UR - Citizen Portal - Profile",
+      "UR - Citizen Portal - Schemes",
+      "UR - Citizen Portal - Support",
+      "UR - Department Portal",
+      "UR - Department Portal - Content Management System",
+      "UR - Department Portal - Dashboard",
+      "UR - Department Portal - Department Help",
+      "UR - Department Portal - FAQs",
+      "UR - Department Portal - Feedback",
+      "UR - Department Portal - GR Assist",
+      "UR - Department Portal - GR Assist - 2",
+      "UR - Department Portal - Login",
+      "UR - Department Portal - Notification Config",
+      "UR - Department Portal - Organization Structure",
+      "UR - Department Portal - Profile",
+      "UR - Department Portal - Reports",
+      "UR - Department Portal - SEVI Dashboard",
+      "UR - Department Portal - Scheme Creation",
+      "UR - Department Portal - Scheme Management",
+      "UR - Department Portal - Scheme Planning",
+      "UR - Department Portal - Scheme Scrutiny",
+      "UR - Department Portal - Support",
+      "UR - Department Portal - User Management",
+      "UR - Consent Management - Consent Request Form",
+      "UR - Consent Management - Consent Type Master",
+      "UR - Consent Management - My Dashboard"
+    ],
+    "max": 5,
+    "onlyFromList": true
+  },
+  "styleExample": "UR | Department Portal | SEVI Dashboard | State Overview | Incomplete Theme Propagation for Dark Mode on Dashboard Canvas\n\nURL: https://unifiedregistry-department-portal.amnex.co.in/department/sevidashboard (Specifically affects the SEVI State Overview module workspace)\n\nSummary: The application's dark mode theme fails to fully propagate down to the analytics components. When a user clicks the theme toggle utility button in the header bar, the peripheral structures—such as the vertical navigation sidebar, top navigation band, and master page wrapper—successfully paint dark theme variables. However, the core SEVI Dashboard body canvas ignores this state shift, remaining stuck in light mode with high-contrast white card backgrounds.\n\nIssue Details\nAn inspection of the dashboard theme layout verified via image_af8558.png isolates a CSS class injection or theme variable mapping breakdown across the inner workspace containers:\n\nIncomplete Theme Mixin Allocation: The persistent structural frames (the left sidebar container and the top user status bar) adapt correctly, switching to deep charcoal/navy background states (#1e293b / #0f172a equivalents).\n\nIsolated Light Canvas Layout: In contrast, the main analytics panel area remains entirely unaltered. The parent content viewport container, filter strip block backgrounds, informational metrics overview cards, and charting widget frames remain forced into a bright white state (#ffffff). This incomplete transition creates an unpleasant high-contrast visual clash and compromises readability.\n\nSteps to Reproduce\n1. Open the Department Portal workspace and log in using verified administrative or department credentials.\n2. Click on the theme toggle button (the sun/moon icon) located inside the top right corner utility cluster of the persistent header band (image_af8558.png).\n3. Confirm that the application shell transitions into its dark mode presentation layout.\n4. Navigate to Sevi Dashboard > State Overview using the vertical sidebar menu drawer.\n5. Observe the background color mapping applied to the metric analytics widgets and main content canvas.\n\nExpected Result\nThe dark theme context must pass seamlessly down to all child modules. Turning dark mode on should trigger a global update that adapts the background, card elements, input panels, text fonts, and data charting canvases of the SEVI Dashboard to use cohesive, dark-palette CSS variables.\n\nActual Result\nThe interface exhibits an incomplete theme transition; the main web workspace frame changes correctly, but the core analytical charts and data component cards stay rendered in full light mode.\n\nSeverity: Minor | Priority: Low | Classification: Issue | Test Phase: Smoke",
+  "zoho": {
+    "domain": "projects.zoho.in",
+    "submitUrl": "",
+    "titleLabel": "Issue Title|Bug Title|Title",
+    "descriptionLabel": "Description|Issue Description",
+    "tagsLabel": "Tags",
+    "attachLabel": "Attachment|Attachments|Attach",
+    "uploadScreenshots": true,
+    "looseMatch": true,
+    "scrollToFirst": true,
+    "emptyOnly": false,
+    "stepsField": false,
+    "stepsLabel": "Steps to Reproduce",
+    "fillTags": false
+  },
+  "meta": {
+    "id": "ur",
+    "name": "UR",
+    "version": 1,
+    "sites": [],
+    "scopes": []
+  }
+}

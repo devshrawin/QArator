@@ -1,6 +1,7 @@
 // QArator side panel. One small state object, re-rendered per view; typing
 // updates state without re-rendering so focus and caret stay put.
-import { loadSettings, onSettingsChanged, PROVIDERS } from '../lib/settings.js';
+import { loadSettings, onSettingsChanged, PROVIDERS, applyScope } from '../lib/settings.js';
+import { listProjects, switchProject, projectForUrl } from '../lib/projects.js';
 import { generateAuto, parseJson, describeError, AIError, AUTO, cooldowns, parseSlot } from '../lib/ai.js';
 import { nearLimit, usedToday, istClock, parseLimits } from '../lib/usage.js';
 import { buildPrompt, buildReport, buildTitle, descriptionText, descriptionHtml, rewritePrompt, rewriteResult, locate, isText, stepsText, matchOption, looseKey, learnRule, suggestTags } from '../lib/report.js';
@@ -16,7 +17,8 @@ import { saveSettings } from '../lib/settings.js';
 
 const $ = (s, r = document) => r.querySelector(s);
 const main = $('#main'), dock = $('#dock');
-let S = null;
+// BASE is the active project as saved; S is BASE with the matching portal's overrides for the page in view.
+let BASE = null, S = null, projects = [];
 let ctrl = null, tick = null;
 
 const fresh = () => ({
@@ -80,6 +82,7 @@ async function saveHistory(status, s = st) {
 
 // ---------- helpers ----------
 const providerName = () => (PROVIDERS[S.ai.provider] || {}).label || 'your AI provider';
+const scoped = () => { if (BASE) S = applyScope(BASE, st.page && st.page.url); };
 const portalLabel = () => {
   const p = st.report?.segments.portal || (st.page && locate(st.page, S.urlRules).portal) || '';
   return [S.title.project, p].filter(Boolean).join(' · ');
@@ -204,6 +207,7 @@ async function captureTab() {
   catch (e) { toast('Capture failed. Click the page once, then try again.', 3200); return; }
   const info = await pageInfo(tab);
   st.page = { ...info, capturedAt: Date.now() };
+  autoProject(st.page.url).catch(() => {});
   if (st.view !== 'review' && st.view !== 'writing') st.view = 'capture';
   await addShot(dataUrl);
 }
@@ -361,7 +365,9 @@ async function useZohoOptions(name) {
   const keep = f.options.filter((o) => /^(unassigned|none)$/i.test(o) && !res.options.some((z) => z.toLowerCase() === o.toLowerCase()));
   f.options = [...keep, ...res.options];
   if (!f.options.includes(f.default)) f.default = f.options[0];
-  await saveSettings(S);
+  const bf = BASE.fields.find((x) => x.id === f.id) || f;
+  bf.options = f.options; bf.default = f.default;
+  await saveSettings(BASE);
   if (st.report && st.report.fields[f.id] !== '' && !f.options.includes(st.report.fields[f.id])) { st.report.fields[f.id] = f.default; st.report.aiChosen[f.id] = false; }
   res.options = null;
   res.reason = `${name} now uses Zoho's ${f.options.length} options. Pick one in the report and fill again.`;
@@ -496,20 +502,25 @@ async function videoFiles(s = st) {
 // Remember portal / module / page for this page, so the next bug here starts with the same names.
 async function learn(s = st) {
   if (!s.report || !s.page || !s.page.url) return;
-  const next = learnRule(S.urlRules, s.page.url, s.report.segments);
-  if (next) { S.urlRules = next; await saveSettings(S); }
+  const next = learnRule(BASE.urlRules, s.page.url, s.report.segments);
+  if (next) { BASE.urlRules = next; scoped(); await saveSettings(BASE); }
 }
 // ---------- tag picker: tick as many team tags as fit; only tags from the team list ----------
 const tagOn = (name) => (st.report?.tags || []).some((t) => t.on && looseKey(t.name) === looseKey(name));
 function tagPickerHtml() {
   const q = looseKey($('#tp-q')?.value || '');
-  const groups = [['Citizen Portal', /citizen/i], ['Department Portal', /department/i], ['Other', /./]];
-  const left = S.tags.list.filter((t) => !q || looseKey(t).includes(q));
-  const rows = groups.map(([name, re]) => {
-    const mine = left.filter((t) => re.test(t)); left.splice(0, left.length, ...left.filter((t) => !mine.includes(t)));
-    return mine.length ? `<div class="tpg">${name}</div>${mine.map((t) => `<button type="button" class="tpo" data-pick="${esc(t)}" aria-pressed="${tagOn(t)}"><span class="tpc">${tagOn(t) ? icon.check : ''}</span>${esc(t)}</button>`).join('')}` : '';
+  // group by the part before the first " - ", after dropping a prefix every tag shares ("UR - Citizen Portal - Home" → "Citizen Portal")
+  const all = S.tags.list, split = (t) => t.split(/\s+-\s+/);
+  const shared = all.length > 1 && all.every((t) => split(t).length > 1 && split(t)[0] === split(all[0])[0]) ? split(all[0])[0] : '';
+  const groupOf = (t) => { const parts = split(t); if (shared && parts[0] === shared) parts.shift(); return parts.length > 1 || !shared ? parts[0] : 'General'; };
+  const left = all.filter((t) => !q || looseKey(t).includes(q));
+  const names = [...new Set(left.map(groupOf))].sort((a, b) => (a === 'General') - (b === 'General') || a.localeCompare(b));
+  const grouped = all.length > 12 && names.length > 1;
+  const rows = (grouped ? names : ['']).map((name) => {
+    const mine = grouped ? left.filter((t) => groupOf(t) === name) : left;
+    return mine.length ? `${grouped ? `<div class="tpg">${esc(name)}</div>` : ''}${mine.map((t) => `<button type="button" class="tpo" data-pick="${esc(t)}" aria-pressed="${tagOn(t)}"><span class="tpc">${tagOn(t) ? icon.check : ''}</span>${esc(t)}</button>`).join('')}` : '';
   }).join('');
-  return rows || '<div class="hint" style="padding:8px">No team tag matches. Add missing tags in Settings › Team format and Zoho › Tags.</div>';
+  return rows || `<div class="hint" style="padding:8px">${all.length ? 'No team tag matches.' : 'This project has no tags yet.'} Add them in Settings › Team format and Zoho › Tags.</div>`;
 }
 function tagChipsHtml() {
   const on = (st.report?.tags || []).filter((t) => t.on);
@@ -641,9 +652,25 @@ function renderFlow() {
 }
 
 // ---------- views ----------
-function setProj() { $('#proj').textContent = portalLabel(); }
+function setProj() {
+  const label = portalLabel();
+  if (projects.length > 1 && BASE) {
+    $('#proj').innerHTML = `<select id="projsel" class="projsel" aria-label="Project">${projects.map((p) => `<option value="${esc(p.id)}" ${p.id === BASE.meta.id ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select>${S.scope ? `<span class="hint"> · ${esc(S.scope)}</span>` : ''}`;
+  } else $('#proj').textContent = label;
+}
+async function refreshProjects() { try { projects = await listProjects(); } catch (e) { projects = []; } setProj(); }
+
+// A page that belongs to another project's sites switches to that project, unless the active one claims it too.
+async function autoProject(url) {
+  if (!BASE || !url) return;
+  const mine = (BASE.meta.sites || []).some((x) => url.toLowerCase().includes(String(x).toLowerCase().replace(/^[a-z]+:\/\//, '').replace(/^\*\./, '')));
+  if (mine) return;
+  const id = await projectForUrl(url);
+  if (id && id !== BASE.meta.id) { const to = projects.find((p) => p.id === id); await switchProject(id); toast(`Switched to ${to ? to.name : 'the matching project'}`, 2600); }
+}
 
 function render() {
+  scoped();
   setProj();
   if (st.view === 'writing' && !writingNow) st.view = 'capture';
   renderFlow();
@@ -1159,6 +1186,7 @@ document.addEventListener('input', (e) => {
 });
 document.addEventListener('change', (e) => {
   const t = e.target;
+  if (t.id === 'projsel') { switchProject(t.value).catch((err) => toast(err.message, 3000)); return; }
   if (t.dataset.field) {
     st.report.fields[t.dataset.field] = t.value; st.report.aiChosen[t.dataset.field] = false; saveDraft();
     const tag = document.querySelector(`label[for="fld-${t.dataset.field}"] .ai-tag`); if (tag) tag.remove();
@@ -1227,10 +1255,11 @@ chrome.runtime.onMessage.addListener((msg) => {
   $('#btn-history').innerHTML = icon.clock;
   $('#btn-bugs').innerHTML = icon.list;
   $('#btn-settings').innerHTML = icon.settings;
-  S = await loadSettings();
+  BASE = await loadSettings(); S = BASE;
   applyAppearance(S);
+  refreshProjects();
   onSettingsChanged((s) => {
-    S = s;
+    BASE = s; scoped(); refreshProjects();
     applyAppearance(S);
     if (st.error && (st.error.kind === 'nokey' || st.error.kind === 'nobase') && (S.ai.apiKey || S.ai.provider === 'compatible')) st.error = null;
     if (st.view !== 'writing') render();
@@ -1245,6 +1274,7 @@ chrome.runtime.onMessage.addListener((msg) => {
   chrome.storage.onChanged.addListener((c, area) => {
     if (area !== 'local') return;
     if (c.usage || c.modelCooldown || c.learnedLimits) refreshQuota();
+    if (c.projects) refreshProjects();
     if (c.onboarded && st.view === 'capture') render();
     if (c.bugs) { refreshBugCounts(); if (st.view === 'bugs') render(); }
   });

@@ -113,3 +113,6 @@ details summary { font-size: calc(12px * var(--fs)); color: var(--ink2); cursor:
 .tpc { flex: none; width: 16px; height: 16px; border: 1px solid var(--fline); border-radius: 4px; display: inline-flex; align-items: center; justify-content: center; }
 .tpo[aria-pressed="true"] .tpc { background: var(--pri); border-color: var(--pri); color: var(--pri-ink); }
 .tpc svg { width: 12px; height: 12px; }
+
+.projsel { max-width: 140px; font: inherit; color: var(--ink2); background: transparent; border: 0; border-radius: 4px; padding: 0 2px; cursor: pointer; }
+.projsel:focus-visible { outline: 2px solid var(--focus); }
