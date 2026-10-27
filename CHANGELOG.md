@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+- **Tag picker**: tick as many team tags as fit from a searchable list (grouped Citizen / Department / Other); ticked tags show as chips with a cross. Enter ticks the top match. Only tags from the team list can be chosen; the free-text tag box is gone.
+- **The AI suggests tags from the team list only**, judged by the page URL and the bug (usually the portal tag and the module tag), and returns none when nothing fits.
+- **The team tag list ships complete** (41 tags from the exported issue list; spelling variants merged). A saved copy of the old 2-tag list is upgraded automatically.
+- **Leave empty** is the first choice in every Issue field; Fill skips those fields in Zoho. Device Type and Reproducible start empty on new installs; Test Phase gains System.
+
 ## 1.3.0 · 2026-10-26
 - **One-step setup**: paste an AI key and you are ready. The key is tested as it is pasted; project code and Zoho address steps are gone (the team defaults are already in place) and a team format file can still be imported from the same screen.
 - **Settings are shorter**: AI key, writing length, usage and appearance stay in view; title format, sections, fields, tags, style example, Zoho labels and export/import sit in a collapsed *Team format and Zoho* group.

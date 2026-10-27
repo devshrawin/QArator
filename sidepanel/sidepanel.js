@@ -362,7 +362,7 @@ async function useZohoOptions(name) {
   f.options = [...keep, ...res.options];
   if (!f.options.includes(f.default)) f.default = f.options[0];
   await saveSettings(S);
-  if (st.report && !f.options.includes(st.report.fields[f.id])) { st.report.fields[f.id] = f.default; st.report.aiChosen[f.id] = false; }
+  if (st.report && st.report.fields[f.id] !== '' && !f.options.includes(st.report.fields[f.id])) { st.report.fields[f.id] = f.default; st.report.aiChosen[f.id] = false; }
   res.options = null;
   res.reason = `${name} now uses Zoho's ${f.options.length} options. Pick one in the report and fill again.`;
   saveDraft(); render();
@@ -499,6 +499,36 @@ async function learn(s = st) {
   const next = learnRule(S.urlRules, s.page.url, s.report.segments);
   if (next) { S.urlRules = next; await saveSettings(S); }
 }
+// ---------- tag picker: tick as many team tags as fit; only tags from the team list ----------
+const tagOn = (name) => (st.report?.tags || []).some((t) => t.on && looseKey(t.name) === looseKey(name));
+function tagPickerHtml() {
+  const q = looseKey($('#tp-q')?.value || '');
+  const groups = [['Citizen Portal', /citizen/i], ['Department Portal', /department/i], ['Other', /./]];
+  const left = S.tags.list.filter((t) => !q || looseKey(t).includes(q));
+  const rows = groups.map(([name, re]) => {
+    const mine = left.filter((t) => re.test(t)); left.splice(0, left.length, ...left.filter((t) => !mine.includes(t)));
+    return mine.length ? `<div class="tpg">${name}</div>${mine.map((t) => `<button type="button" class="tpo" data-pick="${esc(t)}" aria-pressed="${tagOn(t)}"><span class="tpc">${tagOn(t) ? icon.check : ''}</span>${esc(t)}</button>`).join('')}` : '';
+  }).join('');
+  return rows || '<div class="hint" style="padding:8px">No team tag matches. Add missing tags in Settings › Team format and Zoho › Tags.</div>';
+}
+function tagChipsHtml() {
+  const on = (st.report?.tags || []).filter((t) => t.on);
+  return on.length ? on.map((t) => `<span class="tagc">${esc(t.name)}<button type="button" class="tpx" data-unpick="${esc(t.name)}" aria-label="Remove tag ${esc(t.name)}">${icon.x}</button></span>`).join('') : '<span class="hint">No tags chosen. Pick any that fit, or none.</span>';
+}
+function refreshTags(keepSearch = true) {
+  const chips = $('#tp-chips'), list = $('#tp-list');
+  if (!chips || !list) return;
+  const y = list.scrollTop;
+  chips.innerHTML = tagChipsHtml(); list.innerHTML = tagPickerHtml(); list.scrollTop = y;
+}
+function togglePick(name, on) {
+  const hit = S.tags.list.find((t) => looseKey(t) === looseKey(name)) || name;
+  const cur = st.report.tags.find((t) => looseKey(t.name) === looseKey(hit));
+  if (cur) cur.on = on; else if (on) st.report.tags.push({ name: hit, on: true });
+  st.report.tags = st.report.tags.filter((t) => t.on);
+  saveDraft(); refreshTags();
+}
+
 const tagSuggestions = () => (st.report ? suggestTags(st.report, S.tags.list, S.tags.max || 5) : []);
 
 // One download: the Word file, or a zip with the Word file and its videos.
@@ -850,9 +880,8 @@ function renderReview() {
     const val = r.fields[f.id] || '';
     const opts = f.options.includes(val) || !val ? f.options : [val, ...f.options];
     return `<div><label class="slbl" for="fld-${f.id}">${esc(f.name)}${r.aiChosen[f.id] ? '<span class="ai-tag" title="Chosen by AI">AI</span>' : ''}</label>
-      <select id="fld-${f.id}" class="field" data-field="${f.id}">${opts.map((o) => `<option${o === val ? ' selected' : ''}>${esc(o)}</option>`).join('')}</select></div>`;
+      <select id="fld-${f.id}" class="field" data-field="${f.id}"><option value=""${val ? '' : ' selected'}>— Leave empty —</option>${opts.map((o) => `<option${o === val ? ' selected' : ''}>${esc(o)}</option>`).join('')}</select></div>`;
   }).join('');
-  const tags = r.tags.map((t, i) => `<label class="tagc"><input type="checkbox" data-tag="${i}" ${t.on ? 'checked' : ''}>${esc(t.name)}</label>`).join('');
   main.innerHTML = `
   <div style="display:flex;align-items:center;justify-content:space-between;margin:-8px -8px -8px -8px">
     <button type="button" class="btn b-ghost b-sm" data-action="back-capture">${icon.back}Screenshots and note</button>
@@ -875,9 +904,9 @@ function renderReview() {
   </section>
   <section aria-labelledby="h-tag">
     <div class="row-between"><h2 class="h2" id="h-tag">Tags</h2><span class="hint">${S.zoho.fillTags ? 'Ticked tags are added in Zoho' : 'You add tags in Zoho; copy them after filling'}</span></div>
-    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px">${tags || '<span class="hint">No tags suggested.</span>'}</div>
-    <div style="margin-top:8px;max-width:240px">${beam(`<input class="field" id="new-tag" aria-label="Add a tag" placeholder="Add a tag and press Enter" list="tag-list">`)}
-      <datalist id="tag-list">${S.tags.list.map((t) => `<option value="${esc(t)}">`).join('')}</datalist></div>
+    <div id="tp-chips" class="chips" aria-live="polite"></div>
+    <div style="margin-top:8px">${beam(`<input class="field" id="tp-q" type="search" autocomplete="off" aria-label="Search your team's tags" placeholder="Search tags, e.g. schemes">`)}</div>
+    <div id="tp-list" class="tplist" role="group" aria-label="Team tags"></div>
   </section>
   ${st.shots.length || st.videos.length ? `<section aria-labelledby="h-att"><h2 class="h2" id="h-att">Attachments</h2>
     <div class="thumbs" style="margin-top:10px">${[...st.shots, ...st.videos].map((s, i) => `<img src="${s.thumb}" alt="Attachment ${i + 1}">`).join('')}
@@ -901,6 +930,7 @@ function renderReview() {
     <button type="button" class="btn b-sec b-sm" data-action="export-word">${icon.download}Export to Word</button>
     <button type="button" class="btn b-sec b-sm" data-action="save-shots" ${st.shots.length || st.videos.length ? '' : 'disabled'}>${icon.download}Save files</button>
   </div>`;
+  refreshTags();
   after();
 }
 
@@ -1029,6 +1059,9 @@ async function exportHistory() {
 
 // ---------- events ----------
 document.addEventListener('click', async (e) => {
+  const pick = e.target.closest('[data-pick]'), unpick = e.target.closest('[data-unpick]');
+  if (pick && st.report) return togglePick(pick.dataset.pick, !tagOn(pick.dataset.pick));
+  if (unpick && st.report) return togglePick(unpick.dataset.unpick, false);
   const b = e.target.closest('[data-action]');
   if (!b || b.getAttribute('aria-disabled') === 'true' || b.disabled) return;
   const a = b.dataset.action, id = b.dataset.id;
@@ -1112,6 +1145,7 @@ document.addEventListener('click', async (e) => {
 
 document.addEventListener('input', (e) => {
   const t = e.target;
+  if (t.id === 'tp-q') { refreshTags(); return; }
   if (t.dataset.bind) {
     st[t.dataset.bind] = t.value; saveDraft();
     if (t.dataset.bind === 'note') {
@@ -1129,7 +1163,6 @@ document.addEventListener('change', (e) => {
     st.report.fields[t.dataset.field] = t.value; st.report.aiChosen[t.dataset.field] = false; saveDraft();
     const tag = document.querySelector(`label[for="fld-${t.dataset.field}"] .ai-tag`); if (tag) tag.remove();
   }
-  if (t.dataset.tag !== undefined) { st.report.tags[Number(t.dataset.tag)].on = t.checked; saveDraft(); }
   if (t.id === 'file') { addFiles(t.files); t.value = ''; }
   if (t.dataset.bsel !== undefined || t.id === 'bsel-all') {
     if (t.id === 'bsel-all') document.querySelectorAll('[data-bsel]').forEach((c) => { c.checked = t.checked; if (t.checked) bugSel.add(c.dataset.bsel); else bugSel.delete(c.dataset.bsel); });
@@ -1148,12 +1181,10 @@ document.addEventListener('change', (e) => {
 });
 document.addEventListener('keydown', (e) => {
   if ($('#overlay').firstChild) { if (e.key === 'Escape' && $('#vclose')) $('#vclose').click(); return; } // markup editor handles its own keys
-  if (e.target.id === 'new-tag' && e.key === 'Enter') {
+  if (e.target.id === 'tp-q' && e.key === 'Enter') {
     e.preventDefault();
-    // a tag from the team list keeps its exact spelling; anything else is lowercased like AI tags
-    const raw = e.target.value.trim();
-    const v = matchOption(raw, S.tags.list) || raw.toLowerCase();
-    if (v && !st.report.tags.some((t) => looseKey(t.name) === looseKey(v))) { st.report.tags.push({ name: v, on: true }); saveDraft(); render(); $('#new-tag')?.focus(); }
+    const first = $('#tp-list [data-pick]'); // Enter ticks the top match, so tags can be added from the keyboard
+    if (first) { togglePick(first.dataset.pick, true); e.target.value = ''; refreshTags(); }
     return;
   }
   if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'Enter') {

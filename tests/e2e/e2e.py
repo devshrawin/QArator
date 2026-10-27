@@ -275,10 +275,26 @@ try:
         def review_edits():
             panel.fill("#seg-page", "State Overview Tab")
             check("review: title preview updates live", "State Overview Tab" in panel.inner_text("#title-preview"))
-            panel.fill("#new-tag", "UR - Department Portal - SEVI Dashboard")
-            panel.press("#new-tag", "Enter")
-            tags = panel.locator(".tagc").all_inner_texts()
-            check("review: manual tag added", len(tags) == 2, str(tags))
+            before = panel.locator("#tp-chips .tagc").count()
+            panel.fill("#tp-q", "SEVI Dashboard")
+            check("tags: search narrows the team list", panel.locator("#tp-list [data-pick]").count() == 1, str(panel.locator("#tp-list [data-pick]").all_inner_texts()))
+            panel.press("#tp-q", "Enter")
+            tags = panel.locator("#tp-chips .tagc").all_inner_texts()
+            check("tags: Enter ticks the top match", len(tags) == before + 1 and any("SEVI Dashboard" in t for t in tags), str(tags))
+            panel.fill("#tp-q", "")
+            n0 = panel.locator("#tp-chips .tagc").count()
+            panel.click("#tp-list [data-pick='UR - Citizen Portal - Schemes']")
+            panel.click("#tp-list [data-pick='UR - Citizen Portal - Support']")
+            check("tags: several can be ticked one after another", panel.locator("#tp-chips .tagc").count() == n0 + 2)
+            check("tags: ticked rows show pressed", panel.get_attribute("#tp-list [data-pick='UR - Citizen Portal - Support']", "aria-pressed") == "true")
+            panel.locator("section:has(#tp-q)").screenshot(path=os.path.join(OUT, "11-tag-picker.png"))
+            panel.click("#tp-chips [data-unpick='UR - Citizen Portal - Support']")
+            panel.click("#tp-list [data-pick='UR - Citizen Portal - Schemes']")
+            check("tags: chip cross and row click both untick", panel.locator("#tp-chips .tagc").count() == n0)
+            check("tags: no free-text tag box (team list only)", panel.locator("#new-tag").count() == 0)
+            check("fields: every dropdown offers Leave empty", panel.locator("select[data-field] option[value='']").count() == panel.locator("select[data-field]").count())
+            panel.select_option("#fld-device_type", "")
+            check("fields: Leave empty is kept", panel.input_value("#fld-device_type") == "")
             panel.fill("#seg-page", "State Overview")
         phase(review_edits)
 
@@ -566,12 +582,13 @@ try:
 
         def zoho_fill():
             mode["v"] = "ok"
+            sw.evaluate("async () => { const { settings } = await chrome.storage.local.get('settings'); settings.tags.list.push('made-up tag'); await chrome.storage.local.set({ settings }); }")  # a team tag Zoho does not have
             set_settings({"zoho": {"fillTags": True}})
             panel.wait_for_timeout(300)
             panel.click("#dock [data-action=write]")
             panel.wait_for_selector("#title-preview", timeout=15000)
             for t in ["UR - Department Portal - SEVI Dashboard", "made-up tag"]:
-                panel.fill("#new-tag", t); panel.press("#new-tag", "Enter")
+                panel.fill("#tp-q", t); panel.press("#tp-q", "Enter")
             print("  report tags:", panel.locator(".tagc").all_inner_texts())
             # not on Zoho yet
             panel.click("#dock [data-action=fill]")
