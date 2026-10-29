@@ -2,6 +2,7 @@
 import { loadSettings, saveSettings, normalize, exportFormat, DEFAULTS, PROVIDERS, LAYOUTS, SEGMENTS, APPEARANCE, slug } from '../lib/settings.js';
 import { listProjects, switchProject, addProject, newProject, renameProject, deleteProject } from '../lib/projects.js';
 import { buildGuide } from '../lib/guide.js';
+import { cleanKey, detectProvider, openKeyPage } from '../lib/keys.js';
 import { listModels, describeError, rankModels, cooldowns, parseSlot, AUTO } from '../lib/ai.js';
 import { summarize, parsePrices, rowCost, rupees, nextQuotaReset, istClock, usedToday, limitFor, parseLimits } from '../lib/usage.js';
 import { buildTitle } from '../lib/report.js';
@@ -52,6 +53,7 @@ function secAI() {
     ${PROVIDERS[p].needsBase ? `<div class="span2" style="grid-column:1/-1"><label class="lbl" for="base">Endpoint base address</label>${B(`<input id="base" class="field mono" data-path="ai.baseUrl" value="${esc(S.ai.baseUrl)}" placeholder="https://your-server/v1">`)}
       <div class="hint" style="margin-top:4px">QArator calls /models and /chat/completions under this address.</div></div>` : ''}
   </div>
+  ${p === 'gemini' && !String(S.ai.apiKey || '').trim() ? `<div class="getkey"><div class="gk-t">No key yet? It is free and takes a minute.</div><div class="row"><button type="button" class="btn b-pri" data-act="get-key">Get my free key ${icon.external}</button><span class="hint">Opens Google AI Studio. QArator shows a card there with a button that sends the key back here. If Google blocks your work account, use a personal Gmail.</span></div></div>` : ''}
   <div class="row">
     <button type="button" class="btn b-sec" data-act="check" ${st === 'busy' ? 'aria-disabled="true"' : ''}>${st === 'busy' ? orb('connecting', 20) + 'Checking…' : icon.refresh + 'Check key and load models'}</button>
     <span role="status" aria-live="polite">${st && st !== 'busy' ? (st.ok ? `<span class="status">${icon.check}Key works. ${st.count} model${st.count === 1 ? '' : 's'} loaded.</span>` : `<span class="status bad">${icon.alert}${esc(st.msg)}</span>`) : ''}</span>
@@ -362,6 +364,16 @@ document.addEventListener('input', (e) => {
   const path = el.dataset.path;
   if (!path) return;
   let v = el.type === 'checkbox' ? el.checked : el.value;
+  if (path === 'ai.apiKey' || path === 'ai.apiKey2') {
+    // what a copy drags along (spaces, quotes) is removed; a key of another provider switches the provider
+    const k = cleanKey(v); if (k !== v) { el.value = k; v = k; }
+    const d = path === 'ai.apiKey' ? detectProvider(k) : '';
+    if (d && d !== S.ai.provider) {
+      setPath(path, v); S.ai.provider = d; S.ai.models = []; S.ai.model = AUTO; modelStatus = null;
+      toast(`That looks like a ${PROVIDERS[d].label} key, so the provider was switched.`, 3200);
+      save(); render(); clearTimeout(keyTimer); keyTimer = setTimeout(checkKey, 400); return;
+    }
+  }
   if (el.dataset.type === 'number') v = Number(v) || 0;
   if (el.dataset.type === 'list') v = String(v).split(',').map((x) => x.trim()).filter(Boolean);
   if (el.type === 'radio' && !el.checked) return;
@@ -428,6 +440,7 @@ document.addEventListener('click', async (e) => {
       if (!confirm('Reset the usage counters? This only clears QArator\'s own tally.')) return;
       await chrome.storage.local.remove(['usage', 'learnedLimits', 'modelCooldown']);
       await loadUsage(); render(); return;
+    case 'get-key': return openKeyPage();
     case 'export': return doExport();
     case 'guide': return downloadText('qarator-setup-guide.md', buildGuide(), 'text/markdown');
     case 'pj-use': await flush(); await switchProject(b.dataset.id); await reloadAll(); toast('Project switched'); return;

@@ -941,6 +941,60 @@ try:
             }""", FORMAT)
         phase(projects_phase)
 
+        def key_setup():
+            FAKE = "AIza" + "S" * 35
+            op = ctx.new_page()
+            op.on("pageerror", lambda e: logs.append(f"[key] PAGEERROR: {e}"))
+            op.goto(f"chrome-extension://{EID}/options/options.html"); op.wait_for_timeout(500)
+            r = op.evaluate("""async (k) => {
+              const m = await import('/lib/keys.js');
+              return [m.cleanKey('  "' + k + '"\\n'), m.cleanKey('Bearer ' + k), m.detectProvider(k), m.detectProvider('sk-ant-api03-' + 'x'.repeat(30)), m.detectProvider('sk-' + 'y'.repeat(30)), m.detectProvider('hello'), m.detectProvider(' ' + k + ' ')];
+            }""", FAKE)
+            check("keys: copy leftovers are stripped", r[0] == FAKE and r[1] == FAKE, str(r[:2]))
+            check("keys: provider is read from the key", r[2:] == ["gemini", "anthropic", "openai", "", "gemini"], str(r[2:]))
+            # the setup page: plain steps, wrong provider fixed by the key itself, quotes and spaces removed
+            set_settings({"ai": {"provider": "gemini", "apiKey": "", "apiKey2": "", "model": "auto", "baseUrl": "", "models": []}})
+            wz = ctx.new_page()
+            wz.on("pageerror", lambda e: logs.append(f"[welcome2] PAGEERROR: {e}"))
+            wz.goto(f"chrome-extension://{EID}/options/welcome.html"); wz.wait_for_timeout(700)
+            t = wz.inner_text("#step")
+            check("setup: plain steps to get a key are shown", "Create API key" in t and "free" in t and "Get my free key" in t and "personal Gmail" in t, t[:900])
+            check("setup: says what to do with no key", "Do this later" in t and "Export to Word" in t)
+            wz.select_option("#prov", "anthropic"); wz.wait_for_timeout(300)
+            wz.fill("#key", f'  "{FAKE}" ')
+            wz.wait_for_timeout(1800)
+            check("setup: a Gemini key switches the provider and is cleaned", wz.input_value("#prov") == "gemini" and wz.input_value("#key") == FAKE, f"{wz.input_value('#prov')} {wz.input_value('#key')[:8]}")
+            check("setup: the pasted key is tested on its own", "Key works" in wz.inner_text("#key-status"), wz.inner_text("#key-status"))
+            check("setup: steps give way once the key works", wz.locator(".getkey").count() == 0)
+            wz.screenshot(path=os.path.join(OUT, "13-setup-key-ok.png"))
+            wz.close()
+            # the helper on Google AI Studio: absent unless the setup asked, then hands the key over
+            page_html = f"<html><body><h1>API keys</h1><p>Your key</p><code>{FAKE}</code></body></html>"
+            ctx.route("https://aistudio.google.com/**", lambda route: route.fulfill(status=200, content_type="text/html", body=page_html))
+            sw.evaluate("async () => { await chrome.storage.local.remove('keyHelper'); }")
+            g = ctx.new_page(); g.goto("https://aistudio.google.com/app/apikey"); g.wait_for_timeout(1200)
+            check("helper: not shown unless the setup asked for it", g.locator("#qarator-key-helper").count() == 0)
+            g.close()
+            sw.evaluate("async () => { await chrome.storage.local.set({ keyHelper: { until: Date.now() + 600000 } }); }")
+            g = ctx.new_page(); g.goto("https://aistudio.google.com/app/apikey"); g.wait_for_timeout(1500)
+            check("helper: shown on the key page when the setup asked", g.locator("#qarator-key-helper").count() == 1)
+            btn = g.locator("#qarator-key-helper #use")
+            check("helper: finds the key on the page and offers it", btn.is_enabled() and "Use this key" in btn.inner_text(), btn.inner_text())
+            g.screenshot(path=os.path.join(OUT, "14-key-helper.png"))
+            # a page that is not AI Studio, or an extension page, cannot set the key through the same message
+            bad = op.evaluate("""async (k) => (await chrome.runtime.sendMessage({ type: 'qarator-set-key', key: k.replace('AIza', 'AIzb') }))""", FAKE)
+            check("helper: a key of the wrong shape is refused", not (bad or {}).get("ok"), str(bad))
+            wrong = op.evaluate("""async (k) => (await chrome.runtime.sendMessage({ type: 'qarator-set-key', key: k }))""", FAKE)
+            check("helper: only the AI Studio page may hand a key over", not (wrong or {}).get("ok"), str(wrong))
+            btn.click(); g.wait_for_timeout(1500)
+            check("helper: says it is sent", "Sent" in g.locator("#qarator-key-helper #use").inner_text())
+            st2 = sw.evaluate("async () => { const { settings, keyHelper } = await chrome.storage.local.get(['settings', 'keyHelper']); return { key: settings.ai.apiKey, provider: settings.ai.provider, flag: !!keyHelper }; }")
+            check("helper: key saved as Gemini and the request is closed", st2["key"] == FAKE and st2["provider"] == "gemini" and not st2["flag"], str(st2)[:120])
+            g.close(); op.close()
+            ctx.unroute("https://aistudio.google.com/**")
+            set_settings({"ai": {"provider": "gemini", "apiKey": "test-gemini-key", "model": "gemini-2.5-flash", "baseUrl": "", "apiKey2": ""}})
+        phase(key_setup)
+
         def appearance():
             op = ctx.new_page()
             op.on("pageerror", lambda e: logs.append(f"[appearance] PAGEERROR: {e}"))

@@ -3,6 +3,7 @@
 import { loadSettings, saveSettings, normalize, PROVIDERS } from '../lib/settings.js';
 import { addProject } from '../lib/projects.js';
 import { buildGuide } from '../lib/guide.js';
+import { cleanKey, detectProvider, openKeyPage } from '../lib/keys.js';
 import { listModels, rankModels, describeError, AUTO } from '../lib/ai.js';
 import { esc, icon, beam, orb, markSvg, applyTheme, applyAppearance, watchTheme, toast } from '../lib/ui.js';
 
@@ -19,7 +20,7 @@ const KEY_LINKS = {
 // settings page (or anywhere else) while setup is open is never overwritten by this page's older copy.
 async function save() {
   const cur = await loadSettings();
-  S = { ...cur, ai: { ...cur.ai, ...S.ai }, title: { ...cur.title, project: S.title.project }, zoho: { ...cur.zoho, domain: S.zoho.domain } };
+  S = { ...cur, ai: { ...cur.ai, ...S.ai } };
   await saveSettings(S);
 }
 
@@ -36,20 +37,41 @@ const nav = (next = 'Next', { back = true, skip = '' } = {}) => `<div class="foo
 function keyStep() {
   const p = S.ai.provider, link = KEY_LINKS[p];
   const st = keyState;
+  const ok = st && st !== 'busy' && st.ok;
+  const gemini = p === 'gemini';
+  const steps = gemini && !ok ? `
+    <div class="getkey">
+      <div class="gk-t">Step 1 · get your free access code from Google</div>
+      <p class="gk-p">QArator uses an AI to write your bug reports. Google Gemini is free: no card, and it takes about a minute. Google calls the code an <strong>API key</strong>.</p>
+      <ol class="gk-s">
+        <li>Press the button. A Google page opens. Sign in with your Google account.</li>
+        <li>Click <strong>Create API key</strong>. If it asks, choose <strong>Create API key in new project</strong>.</li>
+        <li>QArator shows a small card on that page. When your key appears, press <strong>Use this key in QArator</strong>. You come straight back here.</li>
+      </ol>
+      <div class="row"><button type="button" class="btn b-pri" data-go="getkey">Get my free key ${icon.external}</button>
+        <span class="hint">Opens Google AI Studio in a new tab</span></div>
+      <p class="gk-n">Google says it isn't available for your work account? Sign in with a personal Gmail instead.</p>
+    </div>` : '';
   return `<div class="card">
-    <h1>Paste your AI key and you're ready</h1>
-    <p>QArator captures the screen you test, writes the bug report in your team's format and fills the Zoho Submit Issue form. The only thing to set up is an AI key. It stays in this browser and is sent only to the provider you pick.</p>
-    <div class="g2">
-      <div><label class="lbl" for="prov">Provider</label>
-        <select id="prov" class="field">${Object.entries(PROVIDERS).map(([k, v]) => `<option value="${k}" ${k === p ? 'selected' : ''}>${esc(v.label)}${k === 'gemini' ? ' (free tier)' : ''}</option>`).join('')}</select></div>
-      <div><label class="lbl" for="key">API key</label>${beam(`<input id="key" class="field mono" type="password" autocomplete="off" spellcheck="false" value="${esc(S.ai.apiKey)}" placeholder="${esc(PROVIDERS[p].keyHint)}">`)}</div>
-      ${PROVIDERS[p].needsBase ? `<div style="grid-column:1/-1"><label class="lbl" for="base">Endpoint base address</label>${beam(`<input id="base" class="field mono" value="${esc(S.ai.baseUrl)}" placeholder="http://localhost:11434/v1">`)}</div>` : ''}
+    <h1>One thing to set up: a free AI key</h1>
+    <p>QArator captures the screen you test, writes the bug report in your team's format and fills the Zoho Submit Issue form.</p>
+    ${steps}
+    <div>
+      <div class="lbl" style="margin-bottom:6px">${gemini && !ok ? 'Step 2 · or paste it here if you already have one' : 'Your key'}</div>
+      <div class="g2">
+        <div><label class="lbl" for="prov">Provider</label>
+          <select id="prov" class="field">${Object.entries(PROVIDERS).map(([k, v]) => `<option value="${k}" ${k === p ? 'selected' : ''}>${esc(v.label)}${k === 'gemini' ? ' (free tier)' : ''}</option>`).join('')}</select></div>
+        <div><label class="lbl" for="key">API key</label>${beam(`<input id="key" class="field mono" type="password" autocomplete="off" spellcheck="false" value="${esc(S.ai.apiKey)}" placeholder="${esc(PROVIDERS[p].keyHint)}">`)}</div>
+        ${PROVIDERS[p].needsBase ? `<div style="grid-column:1/-1"><label class="lbl" for="base">Endpoint base address</label>${beam(`<input id="base" class="field mono" value="${esc(S.ai.baseUrl)}" placeholder="http://localhost:11434/v1">`)}</div>` : ''}
+      </div>
+      <div class="hint" style="margin-top:6px">Paste it and QArator checks it for you. Spaces and quotes are removed, and the provider is picked from the key.</div>
     </div>
-    ${link ? `<a href="${link[0]}" target="_blank" rel="noopener" class="hint" style="color:var(--ink)">${esc(link[1])} ${icon.external}</a>` : ''}
+    ${link && !gemini ? `<a href="${link[0]}" target="_blank" rel="noopener" class="hint" style="color:var(--ink)">${esc(link[1])} ${icon.external}</a>` : ''}
     <div class="row"><button type="button" class="btn b-sec" data-go="test" ${st === 'busy' ? 'aria-disabled="true"' : ''}>${st === 'busy' ? orb('connecting', 20) + 'Testing…' : 'Test key'}</button>
       <span role="status" aria-live="polite" id="key-status">${st && st !== 'busy' ? `<span class="status ${st.ok ? 'ok' : 'bad'}">${st.ok ? icon.check : icon.alert}${esc(st.text)}</span>` : ''}</span></div>
+    ${ok ? '' : '<div class="hint"><strong>No key yet?</strong> Press <em>Do this later</em>. You can still capture bugs and use <strong>Export to Word</strong> without AI, and add the key any time in Settings.</div>'}
     <div class="hint">Got a project file from your team? <button type="button" class="btn b-ghost b-sm" data-go="import" style="height:auto;padding:0 6px">Import it</button> Using a different bug tracker? <button type="button" class="btn b-ghost b-sm" data-go="guide" style="height:auto;padding:0 6px">Download the setup guide</button> and give it to an AI agent with your form; it writes the file for you.</div>
-    ${nav('Next', { skip: st && st.ok ? '' : 'Do this later' })}</div>`;
+    ${nav('Next', { skip: ok ? '' : 'Do this later' })}</div>`;
 }
 
 function tryIt() {
@@ -105,6 +127,7 @@ document.addEventListener('click', async (e) => {
   if (step === 0) readKeyFields();
   if (go === 'test') return testKey();
   if (go === 'import') return $('#import-file').click();
+  if (go === 'getkey') return openKeyPage();
   if (go === 'guide') {
     const url = URL.createObjectURL(new Blob([buildGuide()], { type: 'text/markdown' }));
     const a = document.createElement('a'); a.href = url; a.download = 'qarator-setup-guide.md'; document.body.appendChild(a); a.click(); a.remove();
@@ -140,9 +163,20 @@ document.addEventListener('change', async (e) => {
   }
 });
 // A pasted key is tested on its own after a short pause; no need to find the button.
-document.addEventListener('input', (e) => {
+document.addEventListener('input', async (e) => {
   if (e.target.id !== 'key' && e.target.id !== 'base') return;
   clearTimeout(keyTimer);
+  if (e.target.id === 'key') {
+    const raw = e.target.value, k = cleanKey(raw), d = detectProvider(k);
+    if (d && d !== S.ai.provider) {
+      // a Gemini key pasted with Anthropic selected (or the reverse) is not a mistake worth showing
+      S.ai.provider = d; S.ai.apiKey = k; S.ai.models = []; S.ai.model = AUTO; keyState = null;
+      await save(); render(); toast(`That looks like a ${PROVIDERS[d].label} key, so the provider was switched.`, 3200);
+      keyTimer = setTimeout(testKey, 300);
+      return;
+    }
+    if (k !== raw) e.target.value = k;
+  }
   readKeyFields();
   const ready = S.ai.provider === 'compatible' ? /^https?:\/\/.+/.test(S.ai.baseUrl) : S.ai.apiKey.length >= 20;
   if (ready) keyTimer = setTimeout(testKey, 900);
@@ -155,7 +189,14 @@ document.addEventListener('keydown', (e) => {
   $('#mark').innerHTML = markSvg(24);
   S = await loadSettings();
   applyAppearance(S);
-  chrome.storage.onChanged.addListener((c, area) => { if (area === 'local' && c.settings) applyAppearance(normalize(c.settings.newValue)); });
+  chrome.storage.onChanged.addListener((c, area) => {
+    if (area !== 'local' || !c.settings) return;
+    const now = normalize(c.settings.newValue);
+    applyAppearance(now);
+    const fresh = now.ai.apiKey && now.ai.apiKey !== S.ai.apiKey;
+    S = now;
+    if (fresh) { keyState = null; step = 0; render(); testKey(); }
+  });
   watchTheme();
   render();
 })();

@@ -1,6 +1,10 @@
 # Changelog
 
 ## Unreleased
+- **Easier first key**: the setup page now says what to do in plain words (a free access code from Google, three numbered steps, a note for work accounts that Google blocks, and that Export to Word works with no key). Settings shows the same **Get my free key** button while the key box is empty.
+- **Key helper on Google AI Studio**: when QArator itself opens the key page, a small card there says what to click, and once a key is on the page, **Use this key in QArator** sends it back and returns you to the setup tab. It only appears for 30 minutes after you press Get my free key, reads the page only for text shaped like a Gemini key, and only the AI Studio page can hand a key over.
+- **Pasted keys are cleaned and recognised**: spaces, quotes and "Bearer" are removed, and a Gemini, Anthropic or OpenAI key switches the provider by itself (no more "key rejected" for the wrong provider). A pasted key is tested on its own.
+- Fixed: the setup tab, if left open, could overwrite the project code and Zoho address with its old copy.
 - **Projects**: a project is a saved setup (title format, sections, fields, tags, Zoho labels, portals). Keep one per team or product; switch in the panel header or in Settings › Projects. Import adds a project (a file with an id you already have is added as a copy, or updates it if you say so); Export saves one; AI key, usage and look stay per person.
 - **Portals and areas** inside a project: each has an address match and overrides only what differs (tags, title code, sections, fields, page names, style). Every matching portal applies, the longer match last. Editable in Settings › Format of this project › Sites and portals. A page on a project's site switches to that project.
 - **Neutral built-in setup**: a new install has no client names, tags or URL rules (project APP; Severity, Priority, Classification). Import a project file to get a team's setup. Existing installs keep what they have.

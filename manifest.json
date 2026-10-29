@@ -51,6 +51,15 @@
         "content/errors-bridge.js"
       ],
       "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "https://aistudio.google.com/*"
+      ],
+      "js": [
+        "content/key-helper.js"
+      ],
+      "run_at": "document_idle"
     }
   ],
   "commands": {
