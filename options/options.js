@@ -147,7 +147,8 @@ function secProjects() {
   <div>${rows}</div>
   ${notes}
   <div class="row">
-    <button type="button" class="btn b-pri" data-act="import">${icon.upload}Import a project file</button>
+    <a class="btn b-pri" href="project-setup.html">Guided project setup</a>
+    <button type="button" class="btn b-sec" data-act="import">${icon.upload}Import a project file</button>
     <button type="button" class="btn b-sec" data-act="pj-new">${icon.plus}New blank project</button>
     <button type="button" class="btn b-sec" data-act="export">${icon.download}Export this project</button>
     <button type="button" class="btn b-ghost" data-act="reset">Reset this project to the neutral setup</button>
@@ -170,7 +171,7 @@ function secLength() {
 }
 
 function exampleTitle() {
-  return buildTitle({ segments: { project: S.title.project, portal: 'Department Portal', module: 'SEVI Dashboard', page: 'State Overview', summary: S.title.summaryCase === 'title' ? 'Incomplete Theme Propagation for Dark Mode on Dashboard Canvas' : 'Incomplete theme propagation for dark mode on dashboard canvas' } }, S);
+  return buildTitle({ segments: { project: S.title.project, portal: 'Admin Portal', module: 'Orders', page: 'Order List', summary: S.title.summaryCase === 'title' ? 'Export Button Does Nothing' : 'Export button does nothing' } }, S);
 }
 
 function secTitle() {
@@ -323,7 +324,7 @@ function render() {
   const a = document.activeElement;
   const keep = a && a.id && main.contains(a) ? { id: a.id, s: a.selectionStart, e: a.selectionEnd } : null;
   main.innerHTML = secAI() + secProjects() + secLength() + secUsage() + secAppearance()
-    + `<details class="adv" id="advanced"${advOpen ? ' open' : ''}><summary><span class="adv-t">Format of this project</span><span class="adv-d">Where it applies, portals, title format, sections, fields, tags and Zoho labels. Everything the setup file sets can be changed here.</span></summary>`
+    + `<details class="adv" id="advanced"${advOpen ? ' open' : ''}><summary><span class="adv-t"><span class="adv-c" aria-hidden="true">${icon.chevron}</span>Format of this project</span><span class="adv-d">Where it applies, portals, title format, sections, fields, tags and Zoho labels. Everything a project file sets can be changed here.</span></summary><div class="adv-go"><a class="btn b-sec b-sm" href="project-setup.html" style="margin:0 0 14px">Guided project setup</a> <span class="hint">New to this? Answer a few questions, or let an AI agent write the file.</span></div>`
     + secScopes() + secTitle() + secSections() + secFields() + secTags() + secStyle() + secZoho() + '</details>';
   applyTheme();
   scrollTo(0, y);

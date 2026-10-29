@@ -64,9 +64,12 @@ main { flex: 999 1 560px; min-width: 0; max-width: 820px; padding-bottom: 120px;
 .adv > summary { cursor: pointer; padding: 22px 0; list-style: none; display: flex; flex-direction: column; gap: 4px; }
 .adv > summary::-webkit-details-marker { display: none; }
 .adv > summary .adv-t { font-size: calc(18px * var(--fs)); font-weight: 600; }
-.adv > summary .adv-t::before { content: 'B8'; display: inline-block; width: 18px; color: var(--ink3); }
-.adv[open] > summary .adv-t::before { content: 'BE'; }
-.adv > summary .adv-d { color: var(--ink2); padding-left: 18px; }
+.adv > summary .adv-t { display: flex; align-items: center; gap: 8px; }
+.adv > summary .adv-c { display: inline-flex; width: 16px; height: 16px; color: var(--ink3); transition: transform .15s; }
+.adv > summary .adv-c svg { width: 16px; height: 16px; }
+.adv[open] > summary .adv-c { transform: rotate(90deg); }
+.adv > summary .adv-d { color: var(--ink2); padding-left: 24px; line-height: 1.5; }
+.adv .adv-go { padding-left: 24px; }
 .adv > summary:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 
 /* projects */

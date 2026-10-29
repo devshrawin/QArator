@@ -1,6 +1,9 @@
 # Changelog
 
 ## Unreleased
+- **Guided project setup** (Settings › Projects, the Format group, and the setup page): pick one of three ways in. Import a file or pasted text (a code fence from a chat is fine); let an AI agent write it (download the guide, a checklist of what to give the agent, a ready message to copy, then paste the reply); or answer a few questions: name and sites, title parts and order with a live example, description sections, dropdowns and their choices, tags, a style example, then review and create. Errors are listed in plain words with what to send back to the agent.
+- Fixed: the *Format of this project* heading in Settings showed a broken symbol; it now has a proper arrow. The title example in Settings no longer uses client names.
+- Fixed: a test that failed depending on the time of day (daily quota reset).
 - **Easier first key**: the setup page now says what to do in plain words (a free access code from Google, three numbered steps, a note for work accounts that Google blocks, and that Export to Word works with no key). Settings shows the same **Get my free key** button while the key box is empty.
 - **Key helper on Google AI Studio**: when QArator itself opens the key page, a small card there says what to click, and once a key is on the page, **Use this key in QArator** sends it back and returns you to the setup tab. It only appears for 30 minutes after you press Get my free key, reads the page only for text shaped like a Gemini key, and only the AI Studio page can hand a key over.
 - **Pasted keys are cleaned and recognised**: spaces, quotes and "Bearer" are removed, and a Gemini, Anthropic or OpenAI key switches the provider by itself (no more "key rejected" for the wrong provider). A pasted key is tested on its own.

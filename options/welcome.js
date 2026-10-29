@@ -78,7 +78,7 @@ function tryIt() {
   return `<div class="card">
     <h1>You're ready</h1>
     <ul>
-      <li>Change the project code, Zoho address, tags or title format any time in Settings › Team format and Zoho.</li>
+      <li>Set up your team's project (title, sections, dropdowns, tags): <a href="project-setup.html" style="color:var(--ink)">Guided project setup</a>, or any time in Settings.</li>
       <li>Pin QArator: puzzle-piece menu in the toolbar › pin.</li>
       <li><span class="kbd">Alt+Shift+Q</span> opens the panel, <span class="kbd">Alt+Shift+S</span> captures the tab you're on.</li>
       <li><span class="kbd">Alt+Shift+R</span> starts and stops <strong>Record screen</strong>: pick a screen, window or tab, and the mouse pointer is recorded too.</li>

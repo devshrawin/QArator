@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Set up a project</title>
+<link rel="stylesheet" href="../lib/tokens.css">
+<link rel="stylesheet" href="../lib/border-beam.css">
+<link rel="stylesheet" href="../lib/appearance.css">
+<link rel="stylesheet" href="options.css">
+<style>
+  .wz { max-width: 620px; margin: 0 auto; padding: 40px 16px 64px; display: flex; flex-direction: column; gap: 22px; }
+  .dots { display: flex; gap: 6px; align-items: center; }
+  .dots i { width: 28px; height: 4px; border-radius: 2px; background: var(--chip); }
+  .dots i.on { background: var(--acc); }
+  .card { border: 1px solid var(--line); border-radius: 10px; padding: 22px; display: flex; flex-direction: column; gap: 16px; background: var(--bg); }
+  .card h1 { font-size: calc(22px * var(--fs)); font-weight: 600; margin: 0; }
+  .card p { margin: 0; color: var(--ink2); line-height: 1.5; }
+  .card ul { margin: 0; padding-left: 18px; color: var(--ink2); line-height: 1.7; }
+  .foot { display: flex; gap: 8px; align-items: center; }
+  .foot .grow { flex: 1; }
+  .kbd { font: calc(12px * var(--fs)) var(--mono); border: 1px solid var(--fline); border-radius: 4px; padding: 0 5px; }
+  .ok { color: var(--ink); } .bad { color: var(--acc-text); }
+  .routes { display: flex; flex-direction: column; gap: 10px; }
+  .route { text-align: left; font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; cursor: pointer; display: flex; flex-direction: column; gap: 4px; }
+  .route:hover { border-color: var(--ink3); background: var(--chip); }
+  .route:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  .r-t { font-weight: 600; font-size: calc(15px * var(--fs)); }
+  .r-d { color: var(--ink2); line-height: 1.45; }
+  .r-tag { font-size: calc(11px * var(--fs)); font-weight: 600; color: var(--acc-text); background: var(--acc-soft); border-radius: 4px; padding: 1px 6px; margin-left: 6px; }
+  .steps { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 18px; }
+  .steps > li { padding-left: 4px; display: flex; flex-direction: column; gap: 8px; }
+  .steps > li::marker { font-weight: 700; }
+  .s-t { font-weight: 600; } .s-d { color: var(--ink2); line-height: 1.5; }
+  .s-l { margin: 0; padding-left: 18px; color: var(--ink2); line-height: 1.6; }
+  .promptbox { display: flex; gap: 10px; align-items: flex-start; border: 1px solid var(--line); background: var(--chip); border-radius: 8px; padding: 10px 12px; }
+  .promptbox span { flex: 1; min-width: 0; color: var(--ink); line-height: 1.45; }
+  .secbox { border-top: 1px solid var(--line); padding: 10px 0 2px; display: flex; flex-direction: column; gap: 8px; }
+  .segrow { display: grid; grid-template-columns: minmax(0, 1fr) 32px 32px; align-items: center; padding: 3px 0; border-bottom: 1px solid var(--line); }
+  .notes { background: var(--acc-soft); border-radius: 8px; padding: 10px 12px; } .notes ul { margin: 6px 0; padding-left: 18px; }
+  .sum { margin: 0; padding-left: 18px; line-height: 1.7; color: var(--ink2); } .sum strong { color: var(--ink); }
+  textarea.field { resize: vertical; }
+  @media (max-width: 560px) { .g2 { grid-template-columns: minmax(0, 1fr); } }
+</style>
+<script src="../lib/appearance-boot.js"></script>
+<script src="../lib/thinking-orbs.js"></script>
+<script type="module" src="project-setup.js"></script>
+</head>
+<body>
+<header class="top">
+  <div class="wrap top-in">
+    <span id="mark"></span>
+    <span class="brand">QArator</span>
+    <span style="color:var(--ink3)">/</span>
+    <span class="brand" style="font-weight:400">Set up a project</span>
+  </div>
+</header>
+<main class="wz">
+  <div class="dots" id="dots" aria-hidden="true"></div>
+  <div id="step"></div>
+</main>
+<input type="file" id="import-file" accept="application/json,.json" hidden>
+<input type="file" id="pick-file" accept="application/json,.json" hidden>
+</body>
+</html>
