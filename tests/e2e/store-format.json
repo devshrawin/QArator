@@ -1,0 +1,143 @@
+{
+ "qarator": "format",
+ "formatVersion": 2,
+ "meta": {
+  "id": "acme_store",
+  "name": "Acme Shop",
+  "version": 1,
+  "sites": [
+   "localhost"
+  ],
+  "scopes": []
+ },
+ "writingLength": "standard",
+ "title": {
+  "segments": [
+   "project",
+   "portal",
+   "module",
+   "page",
+   "summary"
+  ],
+  "project": "ACME",
+  "separator": " | ",
+  "maxLength": 150,
+  "summaryCase": "title"
+ },
+ "urlRules": [
+  {
+   "match": "/orders",
+   "portal": "Admin",
+   "module": "Orders",
+   "page": "Order List"
+  }
+ ],
+ "sections": [
+  {
+   "id": "url_note",
+   "name": "URL",
+   "layout": "inline",
+   "include": true,
+   "guide": "A short note on which part of the app on this URL is affected. Do not repeat the URL."
+  },
+  {
+   "id": "summary",
+   "name": "Summary",
+   "layout": "inline",
+   "include": true,
+   "guide": "Two or three plain sentences: what the user did, what went wrong, where."
+  },
+  {
+   "id": "steps",
+   "name": "Steps to Reproduce",
+   "layout": "numbered",
+   "include": true,
+   "guide": "One action per step, using on-screen labels. The last step is the observation."
+  },
+  {
+   "id": "expected",
+   "name": "Expected Result",
+   "layout": "paragraph",
+   "include": true,
+   "guide": "What should happen, as a requirement."
+  },
+  {
+   "id": "actual",
+   "name": "Actual Result",
+   "layout": "paragraph",
+   "include": true,
+   "guide": "What happens instead, matching the screenshot."
+  }
+ ],
+ "fields": [
+  {
+   "id": "severity",
+   "name": "Severity",
+   "zohoLabel": "Severity",
+   "options": [
+    "Critical",
+    "Major",
+    "Minor"
+   ],
+   "default": "Minor",
+   "ai": true
+  },
+  {
+   "id": "priority",
+   "name": "Priority",
+   "zohoLabel": "Priority",
+   "options": [
+    "High",
+    "Medium",
+    "Low"
+   ],
+   "default": "Medium",
+   "ai": true
+  },
+  {
+   "id": "classification",
+   "name": "Classification",
+   "zohoLabel": "Classification",
+   "options": [
+    "Functional",
+    "UI",
+    "Performance",
+    "Security"
+   ],
+   "default": "Functional",
+   "ai": true
+  }
+ ],
+ "tags": {
+  "list": [
+   "Shop",
+   "Shop - Checkout",
+   "Shop - Search",
+   "Shop - Cart",
+   "Shop - My orders",
+   "Admin",
+   "Admin - Orders",
+   "Admin - Order list",
+   "Admin - Export",
+   "Admin - Products",
+   "Admin - Refunds",
+   "Admin - Reports",
+   "Other - UI",
+   "Other - Performance",
+   "Other - Regression",
+   "Other - Accessibility"
+  ],
+  "max": 5,
+  "onlyFromList": true
+ },
+ "styleExample": "ACME | Admin | Orders | Order List | Export Button Does Nothing\n\nURL: https://admin.acme.example/orders (Specifically affects the order export)\n\nSummary: On the Order List, pressing Export shows no file and no message.\n\nSteps to Reproduce:\n1. Open Orders.\n2. Press Export CSV.\n3. Observe that nothing downloads.\n\nExpected Result: A CSV file downloads.\n\nActual Result: Nothing happens.",
+ "zoho": {
+  "domain": "projects.zoho.com",
+  "submitUrl": "",
+  "titleLabel": "Issue Title|Bug Title|Title",
+  "descriptionLabel": "Description|Issue Description",
+  "tagsLabel": "Tags",
+  "attachLabel": "Attachment|Attachments|Attach",
+  "fillTags": false
+ }
+}

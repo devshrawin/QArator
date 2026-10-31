@@ -1079,7 +1079,7 @@ async function renderBugs() {
     <button type="button" class="btn btn-ghost btn-sm" data-action="bugs-back">${icon.back}Back</button>
     ${list.some((b) => b.status === 'filled') ? '<button type="button" class="btn btn-ghost btn-sm" data-action="bugs-clear-filled">Remove filled bugs</button>' : ''}</div>
   <div><h1 class="h1">Bug list</h1>
-  <p class="hint" style="margin:4px 0 0">Bugs saved with Generate &amp; next bug. QArator writes them one by one while this panel is open. Open a ready bug to review it and fill Zoho.</p></div>
+  <p class="hint" style="margin:4px 0 0">Bugs saved with Save and capture next. QArator writes them one by one while this panel is open. Open a ready bug to review it and fill Zoho.</p></div>
   ${list.length ? `<label class="chk inline" style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:-12px"><input type="checkbox" id="bsel-all" ${bugSel.size === list.length ? 'checked' : ''}>Select all</label>` : ''}
   <div>${list.length ? list.map((b, i) => {
     const thumb = (b.snap.shots[0] || (b.snap.videos || [])[0] || {}).thumb;
@@ -1094,7 +1094,7 @@ async function renderBugs() {
           ${b.status === 'failed' ? `<button type="button" class="btn btn-ghost btn-sm" data-action="bug-retry" data-id="${b.id}">Try again</button>` : ''}
           <button type="button" class="btn btn-ghost btn-sm" data-action="bug-remove" data-id="${b.id}" aria-label="Remove bug ${i + 1}">${icon.trash}Remove</button>
         </div></div></div>`;
-  }).join('') : '<p class="hint">No saved bugs. On the capture screen, add a screenshot and what\'s wrong, then press Generate &amp; next bug.</p>'}</div>`;
+  }).join('') : '<p class="hint">No saved bugs. On the capture screen, add a screenshot and what\'s wrong, then press Save and capture next.</p>'}</div>`;
   dock.innerHTML = list.length ? bugsDock() : '';
   after();
 }

@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.5.2 · 2026-10-31
+- Fixed: the Fill button in the review footer read "undefinedFill in Zoho" (a missing icon). A test now fails if any button shows the word undefined.
+- **Settings rows**: AI and key, Writing length, Appearance and Zoho labels now show each setting as a row with its name and hint on the left and the control on the right, under one card per page.
+- The Bug list text says *Save and capture next*, like the button.
+- Store images are made from the real extension with neutral Acme data (`python tests/e2e/store.py . <out dir>`), so they never show client names.
 ## 1.5.1 · 2026-10-31
 - **Settings is one page at a time**, with an icon on every menu item, a *Format of this project* group you can fold, and a **search box** that lists matching settings and opens them. The Writing length options now sit on the AI and key page.
 - **Panel header**: the project is a button that opens a menu (switch project, manage projects), and a new meter button shows requests used today per model, with the reset time.

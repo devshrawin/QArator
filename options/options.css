@@ -101,3 +101,9 @@ body.qa { background: var(--bg-subtle); }
 .nav .nav-sub { padding-left: 10px; }
 .sec[hidden] { display: none; }
 .lrow:hover { background: var(--bg-subtle); }
+/* sections laid out as rows: the heading sits above one card, each row has its label on the left */
+.sec.sec-rows { background: none; border: 0; padding: 0; }
+.sec-rows .set-card { box-shadow: var(--shadow-1); }
+.sec-rows .set-row { grid-template-columns: minmax(180px, 240px) minmax(0, 1fr); }
+@media (max-width: 760px) { .sec-rows .set-row { grid-template-columns: minmax(0, 1fr); gap: 10px; } }
+.sec-rows .segf { margin: 0; }

@@ -271,6 +271,7 @@ try:
             panel.click("#dock [data-action=write]")
             panel.wait_for_selector("#title-preview", timeout=15000)
             title = panel.inner_text("#title-preview").replace("\n", "")
+            check("review: no button shows the word undefined", "undefined" not in panel.inner_text("#dock") and "undefined" not in panel.inner_text("#main"))
             check("write(gemini): review opens", True)
             check("write(gemini): title built + Title Case + no trailing period",
                   title == "UR | Department Portal | SEVI Dashboard | State Overview | Dark Mode Leaves the Dashboard Canvas White", title)
@@ -1217,7 +1218,7 @@ try:
             for sec in ["ai", "projects", "usage", "appearance", "scopes", "title", "sections", "fields", "tags", "style", "zoho"]:
                 nav(op, sec)
                 over = op.evaluate("() => document.documentElement.scrollWidth - document.documentElement.clientWidth")
-                bg = op.evaluate("() => getComputedStyle(document.querySelector('main > .sec:not([hidden])')).backgroundColor")
+                bg = op.evaluate("() => getComputedStyle(document.querySelector('main > .sec:not([hidden]) .set-card') || document.querySelector('main > .sec:not([hidden])')).backgroundColor")
                 check(f"dark settings: {sec} fits and uses the dark card", over <= 0 and bg == "rgb(32, 32, 34)", f"overflow {over}, card {bg}")
                 if sec in ("ai", "fields"):
                     op.screenshot(path=os.path.join(OUT, f"20-dark-settings-{sec}.png"))

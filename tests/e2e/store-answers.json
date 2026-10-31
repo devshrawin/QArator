@@ -1,0 +1,87 @@
+[
+ {
+  "summary_title": "export button does nothing",
+  "portal": "Admin",
+  "module": "Orders",
+  "page": "Order List",
+  "sections": {
+   "url_note": "Specifically affects the order export",
+   "summary": "On the Order List, pressing Export CSV shows no file and no message after filtering by Shipped.",
+   "steps": [
+    "1. Sign in to the Admin site as a store manager.",
+    "2. Open Orders > Order List.",
+    "3. Filter by Status: Shipped.",
+    "4. Press Export CSV.",
+    "5. Observe that nothing downloads."
+   ],
+   "expected": "A CSV file with the filtered orders downloads.",
+   "actual": "Nothing happens. The console shows POST /api/orders/export 500 (Internal Server Error)."
+  },
+  "fields": {
+   "severity": "Major",
+   "priority": "High",
+   "classification": "Functional"
+  },
+  "tags": [
+   "Admin",
+   "Admin - Orders",
+   "Admin - Order list",
+   "Admin - Export"
+  ]
+ },
+ {
+  "summary_title": "date filter resets after changing page",
+  "portal": "Admin",
+  "module": "Orders",
+  "page": "Order List",
+  "sections": {
+   "url_note": "Specifically affects the date filter on the order list",
+   "summary": "Changing to page 2 of the Order List clears the date filter.",
+   "steps": [
+    "1. Open Orders > Order List.",
+    "2. Set Date: Last 30 days.",
+    "3. Go to page 2.",
+    "4. Observe the date filter."
+   ],
+   "expected": "The date filter stays applied on every page.",
+   "actual": "The filter is cleared and all orders are shown."
+  },
+  "fields": {
+   "severity": "Minor",
+   "priority": "Medium",
+   "classification": "UI"
+  },
+  "tags": [
+   "Admin",
+   "Admin - Orders",
+   "Admin - Order list"
+  ]
+ },
+ {
+  "summary_title": "order details take nine seconds to open",
+  "portal": "Admin",
+  "module": "Orders",
+  "page": "Order Details",
+  "sections": {
+   "url_note": "Specifically affects how long an order takes to open",
+   "summary": "Opening an order with many items takes about nine seconds.",
+   "steps": [
+    "1. Open Orders > Order List.",
+    "2. Open order #10479.",
+    "3. Observe the load time."
+   ],
+   "expected": "The order opens in under two seconds.",
+   "actual": "The page shows a spinner for about nine seconds."
+  },
+  "fields": {
+   "severity": "Major",
+   "priority": "Medium",
+   "classification": "Performance"
+  },
+  "tags": [
+   "Admin",
+   "Admin - Orders",
+   "Other - Performance"
+  ]
+ }
+]

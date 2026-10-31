@@ -79,31 +79,27 @@ const B = (inner) => beam(inner);
 const input = (path, attrs = '') => B(`<input class="field" data-path="${path}" value="${esc(getPath(path))}" ${attrs}>`);
 
 // ---------- sections ----------
+// A settings row: what it is on the left, the control on the right.
+const row = (label, hint, ctl) => `<div class="set-row"><div><div class="set-row-label">${label}</div>${hint ? `<div class="set-row-hint">${hint}</div>` : ''}</div><div>${ctl}</div></div>`;
+const head = (title, desc) => `<div><h2>${title}</h2><p class="desc">${desc}</p></div>`;
+
 function secAI() {
   const p = S.ai.provider;
-  const models = S.ai.models || [];
   const st = modelStatus;
-  return `<section class="sec" id="ai">
-  <div><h2>AI provider and key</h2><p class="desc">QArator sends the screenshot, your note and page details to this provider to write the report.</p></div>
-  <div class="g2">
-    <div><label class="lbl" for="prov">Provider</label>
-      <select id="prov" class="field" data-path="ai.provider" data-rerender="1">${Object.entries(PROVIDERS).map(([k, v]) => `<option value="${k}" ${k === p ? 'selected' : ''}>${esc(v.label)}</option>`).join('')}</select></div>
-    <div><label class="lbl" for="key">API key</label>
-      <div style="display:flex;gap:6px"><div style="flex:1;min-width:0">${B(`<input id="key" class="field mono" type="${keyShown ? 'text' : 'password'}" data-path="ai.apiKey" value="${esc(S.ai.apiKey)}" autocomplete="off" spellcheck="false" placeholder="${esc(PROVIDERS[p].keyHint)}">`)}</div>
-      <button type="button" class="btn btn-secondary" data-act="show-key" style="flex:none" aria-pressed="${keyShown}">${keyShown ? 'Hide' : 'Show'}</button></div></div>
-    ${p !== 'compatible' ? `<div style="grid-column:1/-1"><label class="lbl" for="key2">Backup key <span style="font-weight:400;color:var(--ink3)">optional</span></label>
-      <div style="max-width:480px">${B(`<input id="key2" class="field mono" type="${keyShown ? 'text' : 'password'}" data-path="ai.apiKey2" value="${esc(S.ai.apiKey2 || '')}" autocomplete="off" spellcheck="false" placeholder="Used when the main key runs out or is rejected">`)}</div>
-      <div class="hint" style="margin-top:4px">${p === 'gemini' ? 'Google counts free quota per Google Cloud project, not per key: create the backup key in a different project or Google account, or it runs out at the same time.' : 'Used when the main key is rate-limited or rejected.'}</div></div>` : ''}
-    ${PROVIDERS[p].needsBase ? `<div class="span2" style="grid-column:1/-1"><label class="lbl" for="base">Endpoint base address</label>${B(`<input id="base" class="field mono" data-path="ai.baseUrl" value="${esc(S.ai.baseUrl)}" placeholder="https://your-server/v1">`)}
-      <div class="hint" style="margin-top:4px">QArator calls /models and /chat/completions under this address.</div></div>` : ''}
+  const keyBox = (id, path, val, ph) => `<div style="display:flex;gap:6px"><div style="flex:1;min-width:0">${B(`<input id="${id}" class="field mono" type="${keyShown ? 'text' : 'password'}" data-path="${path}" value="${esc(val)}" autocomplete="off" spellcheck="false" placeholder="${esc(ph)}">`)}</div>`;
+  const noKey = p === 'gemini' && !String(S.ai.apiKey || '').trim();
+  return `<section class="sec sec-rows" id="ai">
+  ${head('AI and key', 'QArator uses your own key to ask the AI to write reports. The screenshot, your note and page details go to this provider. The key is stored only in this browser and is never included in an export.')}
+  <div class="set-card">
+    ${row('Provider', 'Who writes the reports.', `<select id="prov" class="field" data-path="ai.provider" data-rerender="1" style="max-width:320px">${Object.entries(PROVIDERS).map(([k, v]) => `<option value="${k}" ${k === p ? 'selected' : ''}>${esc(v.label)}</option>`).join('')}</select>`)}
+    ${row('Main key', p === 'gemini' ? 'From Google AI Studio. Paste it and QArator checks it.' : 'Paste the key from your provider.', `${keyBox('key', 'ai.apiKey', S.ai.apiKey, PROVIDERS[p].keyHint)}<button type="button" class="btn btn-secondary" data-act="show-key" style="flex:none" aria-pressed="${keyShown}">${keyShown ? 'Hide' : 'Show'}</button></div>
+      ${noKey ? `<div class="getkey" style="margin-top:12px"><div class="gk-t">No key yet? It is free and takes a minute.</div><div class="row"><button type="button" class="btn btn-primary" data-act="get-key">Get my free key ${icon.external}</button><span class="hint">Opens Google AI Studio. QArator shows a card there with a button that sends the key back here.</span></div></div>` : ''}
+      <div class="row" style="margin-top:10px"><button type="button" class="btn btn-secondary btn-sm" data-act="check" ${st === 'busy' ? 'aria-disabled="true"' : ''}>${st === 'busy' ? orb('connecting', 20) + 'Checking…' : icon.refresh + 'Check key and load models'}</button>
+      <span role="status" aria-live="polite">${st && st !== 'busy' ? (st.ok ? `<span class="status">${icon.check}Key works. ${st.count} model${st.count === 1 ? '' : 's'} loaded.</span>` : `<span class="status bad">${icon.alert}${esc(st.msg)}</span>`) : ''}</span></div>`)}
+    ${p !== 'compatible' ? row('Backup key', p === 'gemini' ? 'Optional. Google counts free quota per Google Cloud project, not per key: make it in a different project or account.' : 'Optional. Used when the main key is rate-limited or rejected.', `<div style="max-width:480px">${B(`<input id="key2" class="field mono" type="${keyShown ? 'text' : 'password'}" data-path="ai.apiKey2" value="${esc(S.ai.apiKey2 || '')}" autocomplete="off" spellcheck="false" placeholder="Used when the main key runs out or is rejected">`)}</div>`) : ''}
+    ${PROVIDERS[p].needsBase ? row('Endpoint address', 'QArator calls /models and /chat/completions under this address.', B(`<input id="base" class="field mono" data-path="ai.baseUrl" value="${esc(S.ai.baseUrl)}" placeholder="https://your-server/v1">`)) : ''}
+    ${modelPicker()}
   </div>
-  ${p === 'gemini' && !String(S.ai.apiKey || '').trim() ? `<div class="getkey"><div class="gk-t">No key yet? It is free and takes a minute.</div><div class="row"><button type="button" class="btn btn-primary" data-act="get-key">Get my free key ${icon.external}</button><span class="hint">Opens Google AI Studio. QArator shows a card there with a button that sends the key back here. If Google blocks your work account, use a personal Gmail.</span></div></div>` : ''}
-  <div class="row">
-    <button type="button" class="btn btn-secondary" data-act="check" ${st === 'busy' ? 'aria-disabled="true"' : ''}>${st === 'busy' ? orb('connecting', 20) + 'Checking…' : icon.refresh + 'Check key and load models'}</button>
-    <span role="status" aria-live="polite">${st && st !== 'busy' ? (st.ok ? `<span class="status">${icon.check}Key works. ${st.count} model${st.count === 1 ? '' : 's'} loaded.</span>` : `<span class="status bad">${icon.alert}${esc(st.msg)}</span>`) : ''}</span>
-  </div>
-  ${modelPicker()}
-  <p class="hint" style="margin:0">Your key is stored only in this browser and sent only to the provider above. It is never included in an export.</p>
   </section>`;
 }
 
@@ -114,16 +110,12 @@ function modelPicker() {
   const order = rankModels(S.ai.provider, models).slice(0, 4);
   const autoHint = !models.length ? 'Auto loads your key\'s models the first time it writes, or press Check key now.'
     : order.length ? `Auto tries ${order.map(esc).join(', then ')}. A model that hits its limit rests until it can answer again.` : 'No image-capable model found for this key.';
-  return `<div class="g2">
-    <div><label class="lbl" for="model">Model</label>
-      <select id="model" class="field" data-path="ai.model" data-type="model">
+  return `${row('Model', auto ? autoHint : 'Pick a model that can read images.', `<select id="model" class="field" data-path="ai.model" data-type="model" style="max-width:420px">
         <option value="${AUTO}" ${auto ? 'selected' : ''}>Auto (recommended)</option>
         ${list.map((m) => `<option value="${esc(m.id)}" ${m.id === S.ai.model ? 'selected' : ''}>${esc(m.label === m.id ? m.id : `${m.label} · ${m.id}`)}</option>`).join('')}
-      </select>
-      <div class="hint" style="margin-top:4px">${auto ? autoHint : 'Pick a model that can read images.'}</div></div>
-    ${!models.length && S.ai.provider !== 'gemini' ? `<div><label class="lbl" for="model-id">Or type a model id</label>${B(`<input id="model-id" class="field mono" data-path="ai.model" value="${auto ? '' : esc(S.ai.model)}" placeholder="model-id">`)}</div>` : ''}
-  </div>
-  ${auto ? '' : `<label class="chk"><input type="checkbox" data-type="bool" data-path="ai.fallback" ${S.ai.fallback !== false ? 'checked' : ''}><span>When this model is busy or out of quota, use the next best one<br><span class="hint">The report says which model wrote it.</span></span></label>`}`;
+      </select>`)}
+  ${!models.length && S.ai.provider !== 'gemini' ? row('Or type a model id', '', B(`<input id="model-id" class="field mono" data-path="ai.model" value="${auto ? '' : esc(S.ai.model)}" placeholder="model-id" style="max-width:420px">`)) : ''}
+  ${auto ? '' : row('If it is busy', 'The report says which model wrote it.', `<label class="chk"><input type="checkbox" data-type="bool" data-path="ai.fallback" ${S.ai.fallback !== false ? 'checked' : ''}><span>Use the next best model when this one is busy or out of quota</span></label>`)}`;
 }
 
 function secUsage() {
@@ -205,12 +197,13 @@ function secProjects() {
 
 function secLength() {
   const opt = [['brief', 'Brief', 'One or two sentences per section. Good for obvious visual bugs.'], ['standard', 'Standard', 'Short paragraphs and full steps. The team default.'], ['detailed', 'Detailed', 'Adds context, affected areas and console errors in full.']];
-  return `<section class="sec" id="length">
-  <div><h2>Writing length</h2><p class="desc">How much detail the AI writes in each section.</p></div>
-  <fieldset style="border:0;padding:0;margin:0;display:flex;flex-direction:column;gap:10px"><legend class="lbl" style="margin-bottom:8px">Length</legend>
-  ${opt.map(([v, n, d]) => `<label class="chk"><input type="radio" name="len" value="${v}" data-path="writingLength" ${S.writingLength === v ? 'checked' : ''}><span><strong style="font-weight:600">${n}</strong><br><span class="hint">${d}</span></span></label>`).join('')}
-  </fieldset>
-  <label class="chk"><input type="checkbox" data-type="bool" data-path="pageErrors" ${S.pageErrors ? 'checked' : ''}><span>Collect page errors<br><span class="hint">Off by default. When on, QArator watches console errors and failed requests on the sites you test and offers them for the report. Tabs that were already open need one reload.</span></span></label>
+  return `<section class="sec sec-rows" id="length">
+  ${head('Writing length', 'How much detail the AI writes in each section, and what QArator collects from the page.')}
+  <div class="set-card">
+  ${row('Length', 'Applies to every section.', `<fieldset style="border:0;padding:0;margin:0;display:flex;flex-direction:column;gap:10px"><legend class="sr-only">Length</legend>
+  ${opt.map(([v, n, d]) => `<label class="chk"><input type="radio" name="len" value="${v}" data-path="writingLength" ${S.writingLength === v ? 'checked' : ''}><span><strong style="font-weight:600">${n}</strong><br><span class="hint">${d}</span></span></label>`).join('')}</fieldset>`)}
+  ${row('Page errors', 'Off by default. Tabs that were already open need one reload.', `<label class="chk"><input type="checkbox" data-type="bool" data-path="pageErrors" ${S.pageErrors ? 'checked' : ''}><span>Collect page errors<br><span class="hint">When on, QArator watches console errors and failed requests on the sites you test and offers them for the report.</span></span></label>`)}
+  </div>
   </section>`;
 }
 
@@ -302,45 +295,42 @@ function secStyle() {
 function secZoho() {
   const z = S.zoho;
   const cb = (path, title, hint = '') => `<label class="chk"><input type="checkbox" data-type="bool" data-path="zoho.${path}" ${z[path] ? 'checked' : ''}><span>${title}${hint ? `<br><span class="hint">${hint}</span>` : ''}</span></label>`;
-  return `<section class="sec" id="zoho">
-  <div><h2>Zoho fill options</h2><p class="desc">How QArator fills the Submit Issue form. It never presses Submit.</p></div>
-  <div class="g2">
-    <div><label class="lbl" for="zdom">Zoho Projects address</label>${B(`<input id="zdom" class="field mono" data-path="zoho.domain" value="${esc(z.domain)}" placeholder="projects.zoho.in">`)}</div>
-    <div><label class="lbl" for="zsub">Submit Issue page (optional)</label>${B(`<input id="zsub" class="field mono" data-path="zoho.submitUrl" value="${esc(z.submitUrl)}" placeholder="Opened by “Open Zoho Projects”">`)}</div>
-    <div><label class="lbl" for="zt">Title field label</label>${input('zoho.titleLabel', 'id="zt"')}</div>
-    <div><label class="lbl" for="zd">Description field label</label>${input('zoho.descriptionLabel', 'id="zd"')}</div>
-    <div><label class="lbl" for="zg">Tags field label</label>${input('zoho.tagsLabel', 'id="zg"')}</div>
-    <div><label class="lbl" for="za">Attachment field label</label>${input('zoho.attachLabel', 'id="za"')}</div>
-    <div><label class="lbl" for="zs">Steps box label</label>${input('zoho.stepsLabel', 'id="zs"')}</div>
-  </div>
-  <p class="hint" style="margin:-6px 0 0">Labels are matched against the text shown next to each field in your Zoho form. Separate alternatives with |.</p>
-  <div style="display:flex;flex-direction:column;gap:12px">
-    ${cb('uploadScreenshots', 'Upload screenshots as attachments')}
-    ${cb('looseMatch', 'Match dropdown options loosely', 'Ignores case and extra spaces, so “ui / visual” fills “UI / Visual”.')}
-    ${cb('scrollToFirst', 'Scroll to the first field that needs a check')}
-    ${cb('emptyOnly', 'Fill empty fields only', 'Keeps anything you already typed in the Zoho form.')}
-    ${cb('stepsField', 'Also fill Zoho’s separate Steps to Reproduce box', 'The steps stay in the description too. Zoho limits this box to 1000 characters.')}
-    ${cb('fillTags', 'Also add ticked tags in Zoho', 'Off: after filling, QArator lists the suggested tags from your list with Copy buttons and you add them in Zoho.')}
-    <label class="chk" style="cursor:default"><input type="checkbox" checked disabled><span>Leave Submit to me <span class="hint">· always on</span></span></label>
+  const f = (id, label, ctl) => row(label, '', `<div style="max-width:420px">${ctl}</div>`);
+  return `<section class="sec sec-rows" id="zoho">
+  ${head('Zoho labels and fill options', 'How QArator finds and fills the Submit Issue form. It never presses Submit. Labels are matched against the text next to each field in your Zoho form; separate alternatives with |.')}
+  <div class="set-card">
+    ${row('Zoho Projects address', 'Where your Zoho Projects lives.', `<div style="max-width:420px">${B(`<input id="zdom" class="field mono" data-path="zoho.domain" value="${esc(z.domain)}" placeholder="projects.zoho.in">`)}</div>`)}
+    ${row('Submit Issue page', 'Optional. Opened by “Open Zoho Projects”.', `<div style="max-width:420px">${B(`<input id="zsub" class="field mono" data-path="zoho.submitUrl" value="${esc(z.submitUrl)}" placeholder="https://projects.zoho.in/…">`)}</div>`)}
+    ${f('zt', 'Title field label', input('zoho.titleLabel', 'id="zt"'))}
+    ${f('zd', 'Description field label', input('zoho.descriptionLabel', 'id="zd"'))}
+    ${f('zg', 'Tags field label', input('zoho.tagsLabel', 'id="zg"'))}
+    ${f('za', 'Attachment field label', input('zoho.attachLabel', 'id="za"'))}
+    ${f('zs', 'Steps box label', input('zoho.stepsLabel', 'id="zs"'))}
+    ${row('When filling', '', `<div style="display:flex;flex-direction:column;gap:12px">
+      ${cb('uploadScreenshots', 'Upload screenshots as attachments')}
+      ${cb('looseMatch', 'Match dropdown options loosely', 'Ignores case and extra spaces, so “ui / visual” fills “UI / Visual”.')}
+      ${cb('scrollToFirst', 'Scroll to the first field that needs a check')}
+      ${cb('emptyOnly', 'Fill empty fields only', 'Keeps anything you already typed in the Zoho form.')}
+      ${cb('stepsField', 'Also fill Zoho’s separate Steps to Reproduce box', 'The steps stay in the description too. Zoho limits this box to 1000 characters.')}
+      ${cb('fillTags', 'Also add ticked tags in Zoho', 'Off: after filling, QArator lists the suggested tags from your list with Copy buttons and you add them in Zoho.')}
+      <label class="chk" style="cursor:default"><input type="checkbox" checked disabled><span>Leave Submit to me <span class="hint">· always on</span></span></label></div>`)}
   </div>
   </section>`;
 }
 
+
 function secAppearance() {
   const a = S.appearance;
-  const group = (key, legend, hint = '') => `<fieldset class="segf"><legend class="lbl">${legend}</legend>
-    <div class="seg">${Object.entries(APPEARANCE[key]).map(([v, n]) => `<label><input type="radio" name="ap-${key}" value="${v}" data-path="appearance.${key}" ${a[key] === v ? 'checked' : ''}><span>${n}</span></label>`).join('')}</div>
-    ${hint ? `<div class="hint" style="margin-top:6px">${hint}</div>` : ''}</fieldset>`;
-  return `<section class="sec" id="appearance">
-  <div><h2>Appearance</h2><p class="desc">How the side panel and these pages look on this computer. Not included in format exports.</p></div>
-  <div class="g2">
+  const group = (key, label, hint, extra = '') => row(label, hint, `<fieldset class="segf"><legend class="sr-only">${label}</legend><div class="seg">${Object.entries(APPEARANCE[key]).map(([v, n]) => `<label><input type="radio" name="ap-${key}" value="${v}" data-path="appearance.${key}" ${a[key] === v ? 'checked' : ''}><span>${n}</span></label>`).join('')}</div></fieldset>${extra}`);
+  return `<section class="sec sec-rows" id="appearance">
+  ${head('Appearance', 'How the side panel and these pages look on this computer. Not included in format exports.')}
+  <div class="set-card">
     ${group('theme', 'Theme', 'System follows your Windows or macOS setting.')}
-    ${group('fontSize', 'Text size')}
-    ${group('glow', 'Field glow', 'The light around a text box while you type in it.')}
+    ${group('fontSize', 'Text size', 'Changes the panel and these pages.')}
+    ${group('glow', 'Field glow', 'The light around a text box while you type in it.', `<div style="max-width:360px;margin-top:10px"><label class="lbl" for="ap-try">Try it</label>${B('<input id="ap-try" class="field" placeholder="Click here to see the field glow">')}</div>`)}
     ${group('motion', 'Animations', 'System turns them off when your computer asks for reduced motion.')}
-    ${group('density', 'Side panel spacing')}
+    ${group('density', 'Side panel spacing', 'How tightly the panel is packed.')}
   </div>
-  <div style="max-width:360px"><label class="lbl" for="ap-try">Try it</label>${B('<input id="ap-try" class="field" placeholder="Click here to see the field glow">')}</div>
   </section>`;
 }
 
