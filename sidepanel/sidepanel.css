@@ -96,9 +96,9 @@ details summary { font-size: calc(12px * var(--fs)); color: var(--ink2); cursor:
 .tpg { position: sticky; top: 0; background: var(--bg); padding: 6px 10px 2px; font-size: var(--t-xs); font-weight: var(--fw-semibold); color: var(--text-3); letter-spacing: .02em; }
 .tpo { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; border: 0; background: none; padding: 7px 10px; font: inherit; color: var(--ink); cursor: pointer; overflow-wrap: anywhere; }
 .tpo:hover { background: var(--chip); }
-.tpo[aria-pressed="true"] { font-weight: var(--fw-semibold); background: var(--accent-soft); }
+.tpo[aria-selected="true"] { font-weight: var(--fw-semibold); background: var(--accent-soft); }
 .tpc { flex: none; width: 16px; height: 16px; border: 1px solid var(--fline); border-radius: 4px; display: inline-flex; align-items: center; justify-content: center; }
-.tpo[aria-pressed="true"] .tpc { background: var(--accent); border-color: var(--accent); color: var(--text-on-accent); }
+.tpo[aria-selected="true"] .tpc { background: var(--accent); border-color: var(--accent); color: var(--text-on-accent); }
 .tpc svg { width: 12px; height: 12px; }
 
 .projsel { max-width: 140px; font: inherit; color: var(--ink2); background: transparent; border: 0; border-radius: 4px; padding: 0 2px; cursor: pointer; }
@@ -121,3 +121,4 @@ details summary { font-size: calc(12px * var(--fs)); color: var(--ink2); cursor:
 .think-step .tick canvas { width: 16px !important; height: 16px !important; }
 .select select { font-size: var(--t-md); }
 .toast { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: var(--z-toast); max-width: calc(100vw - 32px); }
+.tpo.is-active { background: var(--bg-muted); box-shadow: inset 2px 0 0 var(--accent); }

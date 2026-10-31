@@ -292,7 +292,7 @@ try:
             panel.click("#tp-list [data-pick='UR - Citizen Portal - Schemes']")
             panel.click("#tp-list [data-pick='UR - Citizen Portal - Support']")
             check("tags: several can be ticked one after another", panel.locator("#tp-chips .tagc").count() == n0 + 2)
-            check("tags: ticked rows show pressed", panel.get_attribute("#tp-list [data-pick='UR - Citizen Portal - Support']", "aria-pressed") == "true")
+            check("tags: ticked rows show pressed", panel.get_attribute("#tp-list [data-pick='UR - Citizen Portal - Support']", "aria-selected") == "true")
             panel.locator("section:has(#tp-q)").screenshot(path=os.path.join(OUT, "11-tag-picker.png"))
             panel.click("#tp-chips [data-unpick='UR - Citizen Portal - Support']")
             panel.click("#tp-list [data-pick='UR - Citizen Portal - Schemes']")

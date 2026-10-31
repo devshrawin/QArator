@@ -183,6 +183,7 @@ with sync_playwright() as p:
         op.close()
         panel.click("[data-action=back-capture]") if panel.locator("[data-action=back-capture]").count() else None
         panel.click("[data-action=reset]") if panel.locator("[data-action=reset]").count() else None
+        panel.click(".modal [data-yes]") if panel.locator(".modal [data-yes]").count() else None
     phase(upgrade)
 
     def hostile():

@@ -6,7 +6,7 @@ import { generateAuto, parseJson, describeError, AIError, AUTO, cooldowns, parse
 import { nearLimit, usedToday, istClock, parseLimits } from '../lib/usage.js';
 import { buildPrompt, buildReport, buildTitle, descriptionText, descriptionHtml, rewritePrompt, rewriteResult, locate, isText, stepsText, matchOption, looseKey, learnRule, suggestTags } from '../lib/report.js';
 import { detectEnv, fileToDataUrl, forAi, thumb } from '../lib/env.js';
-import { esc, icon, orb, beam, markSvg, applyTheme, applyAppearance, watchTheme, toast, copyText, downloadDataUrl, fmtTime, uid } from '../lib/ui.js';
+import { esc, icon, orb, beam, markSvg, applyTheme, applyAppearance, watchTheme, toast, askConfirm, copyText, downloadDataUrl, fmtTime, uid } from '../lib/ui.js';
 import { openMarkup } from './markup.js';
 import { exportDocx, exportReports, exportBugs, bundle } from './export.js';
 import { loadBugs, updateBugs, patchBug, removeBugs, addBug, bugNote, STATUS } from './queue.js';
@@ -518,7 +518,7 @@ function tagPickerHtml() {
   const grouped = all.length > 12 && names.length > 1;
   const rows = (grouped ? names : ['']).map((name) => {
     const mine = grouped ? left.filter((t) => groupOf(t) === name) : left;
-    return mine.length ? `${grouped ? `<div class="tpg">${esc(name)}</div>` : ''}${mine.map((t) => `<button type="button" class="tpo" data-pick="${esc(t)}" aria-pressed="${tagOn(t)}"><span class="tpc">${tagOn(t) ? icon.check : ''}</span>${esc(t)}</button>`).join('')}` : '';
+    return mine.length ? `${grouped ? `<div class="tpg">${esc(name)}</div>` : ''}${mine.map((t) => `<button type="button" class="tpo${tagOn(t) ? ' is-checked' : ''}" role="option" tabindex="-1" data-pick="${esc(t)}" aria-selected="${tagOn(t)}"><span class="tpc">${tagOn(t) ? icon.check : ''}</span>${esc(t)}</button>`).join('')}` : '';
   }).join('');
   return rows || `<div class="hint" style="padding:8px">${all.length ? 'No team tag matches.' : 'This project has no tags yet.'} Add them in Settings › Team format and Zoho › Tags.</div>`;
 }
@@ -947,8 +947,8 @@ function renderReview() {
   <section aria-labelledby="h-tag">
     <div class="row-between"><h2 class="h2" id="h-tag">Tags</h2><span class="hint">${S.zoho.fillTags ? 'Ticked tags are added in Zoho' : 'Zoho does not take tags from forms. After filling, copy them into Zoho’s Tags field.'}</span></div>
     <div id="tp-chips" class="chips" aria-live="polite"></div>
-    <div style="margin-top:8px">${beam(`<input class="field" id="tp-q" type="search" autocomplete="off" aria-label="Search your team's tags" placeholder="Search tags, e.g. schemes">`)}</div>
-    <div id="tp-list" class="tplist" role="group" aria-label="Team tags"></div>
+    <div style="margin-top:8px">${beam(`<input class="field" id="tp-q" type="search" role="combobox" aria-expanded="true" aria-controls="tp-list" aria-autocomplete="list" autocomplete="off" aria-label="Search your team's tags" placeholder="Search tags, e.g. schemes">`)}</div>
+    <div id="tp-list" class="tplist" role="listbox" aria-multiselectable="true" aria-label="Team tags"></div>
   </section>
   ${st.shots.length || st.videos.length ? `<section aria-labelledby="h-att"><h2 class="h2" id="h-att">Attachments</h2>
     <div class="thumbs" style="margin-top:10px">${[...st.shots, ...st.videos].map((s, i) => `<img src="${s.thumb}" alt="Attachment ${i + 1}">`).join('')}
@@ -1138,7 +1138,7 @@ document.addEventListener('click', async (e) => {
     case 'bugs': st.back = st.view === 'bugs' || st.view === 'history' ? st.back : st.view; st.view = 'bugs'; return render();
     case 'bug-open': return openBug(id);
     case 'bug-retry': await patchBug(id, { status: 'waiting', error: null }); runQueue(); return;
-    case 'bug-remove': if (!confirm('Remove this bug from the list?')) return; await removeBugs([id]); bugSel.delete(id); if (st.bugId === id) st.bugId = null; pruneUnused(); return;
+    case 'bug-remove': if (!await askConfirm({ title: 'Remove this bug?', body: 'It is taken off the list with its screenshots and report. This cannot be undone.', ok: 'Remove' })) return; await removeBugs([id]); bugSel.delete(id); if (st.bugId === id) st.bugId = null; pruneUnused(); return;
     case 'bugs-export-full': return exportBugList(true);
     case 'bugs-export-notes': return exportBugList(false);
     case 'bugs-clear-filled': { const ids = (await loadBugs()).filter((b) => b.status === 'filled').map((b) => b.id); await removeBugs(ids); ids.forEach((x) => bugSel.delete(x)); if (ids.includes(st.bugId)) st.bugId = null; pruneUnused(); return; }
@@ -1159,7 +1159,7 @@ document.addEventListener('click', async (e) => {
     case 'cancel': ctrl && ctrl.abort(); return;
     case 'dismiss-error': st.error = null; saveDraft(); return render();
     case 'blank': return blankReport();
-    case 'reset': if (confirm('Clear the screenshots, videos and note?')) { st = fresh(); saveDraft(); pruneUnused(); render(); } return;
+    case 'reset': if (await askConfirm({ title: 'Start over?', body: 'The screenshots, videos and note on this screen are cleared. This cannot be undone.', ok: 'Clear it' })) { st = fresh(); saveDraft(); pruneUnused(); render(); } return;
     case 'back-capture': st.view = 'capture'; st.zoho = null; saveDraft(); return render();
     case 'back-review': st.view = 'review'; saveDraft(); return render();
     case 'rewrite': return rewrite(id);
@@ -1228,9 +1228,19 @@ document.addEventListener('change', (e) => {
 });
 document.addEventListener('keydown', (e) => {
   if ($('#overlay').firstChild) { if (e.key === 'Escape' && $('#vclose')) $('#vclose').click(); return; } // markup editor handles its own keys
+  if (e.target.id === 'tp-q' && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+    e.preventDefault();
+    const opts = [...document.querySelectorAll('#tp-list [data-pick]')]; if (!opts.length) return;
+    const cur = opts.findIndex((o) => o.classList.contains('is-active'));
+    opts.forEach((o) => o.classList.remove('is-active'));
+    const next = opts[(cur + (e.key === 'ArrowDown' ? 1 : -1) + opts.length) % opts.length];
+    next.classList.add('is-active'); next.scrollIntoView({ block: 'nearest' }); e.target.setAttribute('aria-activedescendant', next.id || '');
+    return;
+  }
+  if (e.target.id === 'tp-q' && e.key === 'Escape') { e.target.value = ''; refreshTags(); return; }
   if (e.target.id === 'tp-q' && e.key === 'Enter') {
     e.preventDefault();
-    const first = $('#tp-list [data-pick]'); // Enter ticks the top match, so tags can be added from the keyboard
+    const first = $('#tp-list [data-pick].is-active') || $('#tp-list [data-pick]'); // Enter ticks the active or top match, so tags can be added from the keyboard
     if (first) { togglePick(first.dataset.pick, true); e.target.value = ''; refreshTags(); }
     return;
   }
