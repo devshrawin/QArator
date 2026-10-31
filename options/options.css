@@ -107,3 +107,9 @@ body.qa { background: var(--bg-subtle); }
 .sec-rows .set-row { grid-template-columns: minmax(180px, 240px) minmax(0, 1fr); }
 @media (max-width: 760px) { .sec-rows .set-row { grid-template-columns: minmax(0, 1fr); gap: 10px; } }
 .sec-rows .segf { margin: 0; }
+.mk-sws { display: inline-flex; flex-wrap: wrap; gap: 8px; }
+.sw-pick { position: relative; cursor: pointer; display: inline-flex; }
+.sw-pick input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; }
+.sw-pick span:not(.sr-only) { width: 28px; height: 28px; border-radius: 50%; background: var(--c); box-shadow: 0 0 0 1px var(--line-strong); display: block; }
+.sw-pick input:checked + span { box-shadow: 0 0 0 3px var(--bg), 0 0 0 5px var(--accent); }
+.sw-pick input:focus-visible + span { outline: 2px solid var(--focus); outline-offset: 4px; }

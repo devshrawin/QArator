@@ -1179,7 +1179,7 @@ document.addEventListener('click', async (e) => {
       markupOpening = true;
       try {
         return await openMarkup(shot, st.shots.length - 1, st.shots.length, {
-          startTool: 'crop',
+          startTool: 'crop', defaults: S.editor,
           onApply: async ({ dataUrl, marks, original }) => { Object.assign(shot, { dataUrl, marks, original, thumb: await thumb(dataUrl) }); saveDraft(); render(); }
         });
       } finally { markupOpening = false; }
@@ -1192,6 +1192,7 @@ document.addEventListener('click', async (e) => {
       markupOpening = true;
       try {
         return await openMarkup(shot, i, st.shots.length, {
+          defaults: S.editor,
           onApply: async ({ dataUrl, marks, original }) => { Object.assign(shot, { dataUrl, marks, original, thumb: await thumb(dataUrl) }); saveDraft(); render(); }
         });
       } finally { markupOpening = false; }

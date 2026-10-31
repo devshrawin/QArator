@@ -1,5 +1,5 @@
 // QArator settings page. Edits a copy of the settings and autosaves.
-import { loadSettings, saveSettings, normalize, exportFormat, DEFAULTS, PROVIDERS, LAYOUTS, SEGMENTS, APPEARANCE, slug } from '../lib/settings.js';
+import { loadSettings, saveSettings, normalize, exportFormat, DEFAULTS, PROVIDERS, LAYOUTS, SEGMENTS, APPEARANCE, MARK_COLORS, MARK_WIDTHS, MARK_WIDTH_FACTOR, slug } from '../lib/settings.js';
 import { listProjects, switchProject, addProject, newProject, renameProject, deleteProject } from '../lib/projects.js';
 import { buildGuide } from '../lib/guide.js';
 import { cleanKey, detectProvider, openKeyPage } from '../lib/keys.js';
@@ -22,15 +22,16 @@ const IC = {
   tag: 'M2.5 2.5h5.3l5.7 5.7-5.3 5.3-5.7-5.7z M5.5 5.5h.01', style: 'M3 13.5c2-1 2.5-3 4-4.5l4.5-6 1.5 1.5-6 4.5C5.5 10.5 4 11 3 13.5z',
   link: 'M6.5 9.5l3-3 M7 4.5l1-1a2.8 2.8 0 0 1 4 4l-1 1 M9 11.5l-1 1a2.8 2.8 0 0 1-4-4l1-1',
   globe: 'M8 14a6 6 0 1 0 0-12a6 6 0 1 0 0 12 M2 8h12 M8 2c1.7 1.8 2.5 3.8 2.5 6S9.7 12.2 8 14C6.3 12.2 5.5 10.2 5.5 8S6.3 3.8 8 2',
-  search: 'M7 12a5 5 0 1 0 0-10a5 5 0 1 0 0 10 M10.6 10.6L14 14', chevDown: 'M4 6l4 4 4-4', chevRight: 'M6 4l4 4-4 4'
+  crop: 'M4.5 1.5v10h10 M1.5 4.5h10v10', search: 'M7 12a5 5 0 1 0 0-10a5 5 0 1 0 0 10 M10.6 10.6L14 14', chevDown: 'M4 6l4 4 4-4', chevRight: 'M6 4l4 4-4 4'
 };
 const ic = (n, cls = '') => `<svg class="ic ${cls}" viewBox="0 0 16 16" aria-hidden="true"><path d="${IC[n]}"></path></svg>`;
 // [section id, label, icon, the sections shown on that page]
-const MAIN_NAV = [['projects', 'Projects', 'folder', ['projects']], ['ai', 'AI and key', 'key', ['ai', 'length']], ['usage', 'Usage', 'gauge', ['usage']], ['appearance', 'Appearance', 'sun', ['appearance']]];
+const MAIN_NAV = [['projects', 'Projects', 'folder', ['projects']], ['ai', 'AI and key', 'key', ['ai', 'length']], ['usage', 'Usage', 'gauge', ['usage']], ['appearance', 'Appearance', 'sun', ['appearance']], ['editor', 'Image editor', 'crop', ['editor']]];
 const FMT_NAV = [['scopes', 'Sites and portals', 'globe', ['scopes']], ['title', 'Title format', 'title', ['title']], ['sections', 'Description sections', 'sections', ['sections']], ['fields', 'Fields', 'fields', ['fields']], ['tags', 'Tags', 'tag', ['tags']], ['style', 'Style example', 'style', ['style']], ['zoho', 'Zoho labels', 'link', ['zoho']]];
 const ALL_NAV = [...MAIN_NAV, ...FMT_NAV];
 const INDEX = [
   ['Main key', 'AI and key', 'ai', 'key'], ['Backup key', 'AI and key', 'ai', 'key'], ['Model', 'AI and key', 'ai', 'key'], ['Writing length', 'AI and key', 'ai', 'key'], ['Page errors', 'AI and key', 'length', 'key'],
+  ['Mark colour', 'Image editor', 'editor', 'crop'], ['Line thickness', 'Image editor', 'editor', 'crop'],
   ['Requests left per key', 'Usage', 'usage', 'gauge'], ['Theme', 'Appearance', 'appearance', 'sun'], ['Text size', 'Appearance', 'appearance', 'sun'], ['Reduce motion', 'Appearance', 'appearance', 'sun'],
   ['Import a project file', 'Projects', 'projects', 'folder'], ['Export this project', 'Projects', 'projects', 'folder'], ['Download setup guide', 'Projects', 'projects', 'folder'], ['Set up a new project', 'Projects', 'projects', 'folder'],
   ['Title format', 'Format of this project', 'title', 'title'], ['Separator', 'Format › Title format', 'title', 'title'], ['Description sections', 'Format of this project', 'sections', 'sections'],
@@ -334,6 +335,18 @@ function secAppearance() {
   </section>`;
 }
 
+function secEditor() {
+  const e = S.editor, f = MARK_WIDTH_FACTOR[e.width];
+  return `<section class="sec sec-rows" id="editor">
+  ${head('Image editor', 'How marks look when you draw on a screenshot. Each mark can still be changed in the editor: pick it, then change its colour or thickness, or drag its corner squares to resize it.')}
+  <div class="set-card">
+    ${row('Mark colour', 'Used for new boxes and arrows.', `<fieldset class="segf"><legend class="sr-only">Mark colour</legend><div class="mk-sws" style="gap:10px">${Object.entries(MARK_COLORS).map(([c, n]) => `<label class="sw-pick" title="${n}"><input type="radio" name="ed-color" value="${c}" data-path="editor.color" ${e.color === c ? 'checked' : ''}><span style="--c:${c}"></span><span class="sr-only">${n}</span></label>`).join('')}</div></fieldset>`)}
+    ${row('Line thickness', 'Thin suits small details, thick suits a quick look.', `<fieldset class="segf"><legend class="sr-only">Line thickness</legend><div class="seg">${Object.entries(MARK_WIDTHS).map(([v, n]) => `<label><input type="radio" name="ed-width" value="${v}" data-path="editor.width" ${e.width === v ? 'checked' : ''}><span>${n}</span></label>`).join('')}</div></fieldset>`)}
+    ${row('Preview', 'A box and an arrow as they will be drawn.', `<svg width="260" height="90" viewBox="0 0 260 90" role="img" aria-label="Preview of a box and an arrow" style="background:var(--bg-inset);border:1px solid var(--line);border-radius:8px"><rect x="22" y="20" width="96" height="50" fill="none" stroke="${e.color}" stroke-width="${3 * f}" stroke-linejoin="round" id="ed-prev-box"/><path d="M230 70 L160 24 M160 24 l4 15 M160 24 l15 5" fill="none" stroke="${e.color}" stroke-width="${3 * f}" stroke-linecap="round" stroke-linejoin="round" id="ed-prev-arrow"/></svg>`)}
+  </div>
+  </section>`;
+}
+
 function secScopes() {
   const sc = (S.meta.scopes || []).map((x, i) => `<div class="scope">
     <div class="g2">
@@ -357,7 +370,7 @@ function render() {
   const y = scrollY;
   const a = document.activeElement;
   const keep = a && a.id && main.contains(a) ? { id: a.id, s: a.selectionStart, e: a.selectionEnd } : null;
-  main.innerHTML = secAI() + secProjects() + secLength() + secUsage() + secAppearance()
+  main.innerHTML = secAI() + secProjects() + secLength() + secUsage() + secAppearance() + secEditor()
     + secScopes() + secTitle() + secSections() + secFields() + secTags() + secStyle() + secZoho() + (query.trim() ? resultsHtml() : '');
   applyPage();
   applyTheme();
@@ -428,6 +441,7 @@ document.addEventListener('change', (e) => {
   if (el.dataset.path === 'ai.provider') { S.ai.models = []; S.ai.model = AUTO; save(); render(); return; }
   if (el.dataset.type === 'model') { save(); render(); return; }
   if (el.dataset.path.startsWith('usage.')) { render(); return; }
+  if (el.dataset.path.startsWith('editor.')) { save(); render(); return; }
   if (el.dataset.rerenderBlur) {
     const i = Number(el.dataset.path.split('.')[1]); const f = S.fields[i];
     if (f && !f.options.includes(f.default)) { f.default = f.options[0] || ''; save(); }

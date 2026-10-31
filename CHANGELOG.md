@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.6.0 · 2026-10-31
+- **Marks can be edited after you draw them.** Pick a mark (click it or choose it in the list), then drag its corner squares to resize it, drag either end of an arrow to aim it, or change its **colour** (orange, red, blue, green, yellow, black) and **thickness** (thin, medium, thick). Hidden areas can be resized too. Reopen *Mark up* any time to change them again.
+- **Image editor settings** (Settings › Image editor): the default colour and thickness for new marks, with a preview.
+- Fixed: the screenshot jumped while you drew, because the marks list grew under it. The list now has a fixed height.
 ## 1.5.2 · 2026-10-31
 - Fixed: the Fill button in the review footer read "undefinedFill in Zoho" (a missing icon). A test now fails if any button shows the word undefined.
 - **Settings rows**: AI and key, Writing length, Appearance and Zoho labels now show each setting as a row with its name and hint on the left and the control on the right, under one card per page.

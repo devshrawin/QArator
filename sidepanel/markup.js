@@ -1,26 +1,28 @@
 // Full-panel markup editor: Box, Arrow, Hide (real black pixels), Undo.
 import { esc, icon } from '../lib/ui.js';
 import { loadImage } from '../lib/env.js';
+import { MARK_COLORS, MARK_WIDTHS, MARK_WIDTH_FACTOR } from '../lib/settings.js';
 
 const MARK = '#FF6A2B';
 const NAMES = { box: 'Box', arrow: 'Arrow', hide: 'Hidden area', crop: 'Crop' };
 const HINTS = {
-  box: 'Drag to draw a box around the problem. Drag a mark to move it; Delete removes the selected mark.',
-  arrow: 'Drag from where the arrow starts to the thing it points at.',
+  box: 'Drag to draw a box around the problem. Drag a mark to move it, drag its corner squares to resize it; Delete removes it.',
+  arrow: 'Drag from where the arrow starts to the thing it points at. Drag either end to change it.',
   hide: 'Drag over personal data such as ID numbers. It is blacked out in the saved image, not just covered.',
   crop: 'Drag around the part of the page that matters. Everything outside is cut away when you press Apply.'
 };
 
+const widthOf = (m, sw) => sw * (MARK_WIDTH_FACTOR[m.width] || 1);
 function drawMarks(ctx, marks, sw, selected = -1, k = 1) {
   const order = [...marks.keys()].sort((a, b) => (marks[a].type === 'hide') - (marks[b].type === 'hide'));
   for (const i of order) {
     const m = marks[i];
     const x = Math.min(m.x1, m.x2), y = Math.min(m.y1, m.y2), w = Math.abs(m.x2 - m.x1), h = Math.abs(m.y2 - m.y1);
     if (m.type === 'hide') { ctx.fillStyle = '#000'; ctx.fillRect(x, y, w, h); }
-    else if (m.type === 'box') { ctx.strokeStyle = MARK; ctx.lineWidth = sw; ctx.lineJoin = 'round'; ctx.strokeRect(x, y, w, h); }
+    else if (m.type === 'box') { ctx.strokeStyle = m.color || MARK; ctx.lineWidth = widthOf(m, sw); ctx.lineJoin = 'round'; ctx.strokeRect(x, y, w, h); }
     else if (m.type === 'arrow') {
-      const ang = Math.atan2(m.y2 - m.y1, m.x2 - m.x1), head = sw * 4.5;
-      ctx.strokeStyle = MARK; ctx.lineWidth = sw; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+      const lw = widthOf(m, sw), ang = Math.atan2(m.y2 - m.y1, m.x2 - m.x1), head = lw * 4.5;
+      ctx.strokeStyle = m.color || MARK; ctx.lineWidth = lw; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
       ctx.beginPath(); ctx.moveTo(m.x1, m.y1); ctx.lineTo(m.x2, m.y2);
       ctx.moveTo(m.x2 - head * Math.cos(ang - 0.45), m.y2 - head * Math.sin(ang - 0.45)); ctx.lineTo(m.x2, m.y2);
       ctx.lineTo(m.x2 - head * Math.cos(ang + 0.45), m.y2 - head * Math.sin(ang + 0.45));
@@ -47,13 +49,14 @@ export async function flatten(original, marks) {
 }
 const strokeFor = (w) => Math.max(3, Math.round(w / 420));
 
-export async function openMarkup(shot, index, total, { onApply, onCancel, startTool = 'box' }) {
+export async function openMarkup(shot, index, total, { onApply, onCancel, startTool = 'box', defaults = {} }) {
   const host = document.getElementById('overlay');
   const original = shot.original || shot.dataUrl;
   const img = await loadImage(original);
   const W = img.naturalWidth, H = img.naturalHeight, SW = strokeFor(W);
   let marks = JSON.parse(JSON.stringify(shot.marks || []));
   let tool = startTool, selected = marks.length ? marks.length - 1 : -1, cropRect = null;
+  const cur = { color: defaults.color in MARK_COLORS ? defaults.color : MARK, width: defaults.width in MARK_WIDTHS ? defaults.width : 'medium' };
   const undo = [];
   const prevFocus = document.activeElement;
 
@@ -68,6 +71,7 @@ export async function openMarkup(shot, index, total, { onApply, onCancel, startT
       <span class="vsep"></span>
       <button type="button" class="ib" data-mk="undo" aria-label="Undo (Ctrl+Z)" title="Undo (Ctrl+Z)">${icon.undo}</button>
     </div>
+    <div class="mk-bar mk-style" id="mk-style" role="toolbar" aria-label="Mark style" style="padding:0 8px 0 14px;height:44px;gap:10px;overflow:hidden"></div>
     <div class="mk-stage" id="mk-stage">
       <canvas id="mk-canvas" tabindex="0" role="img" aria-label="Screenshot. Use the tools to draw on it."></canvas>
       <div class="hint" id="mk-hint" aria-live="polite" style="text-align:center;max-width:340px"></div>
@@ -121,9 +125,22 @@ export async function openMarkup(shot, index, total, { onApply, onCancel, startT
     tool = t;
     wrap.querySelectorAll('[data-tool]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.tool === t)));
     wrap.querySelector('#mk-hint').textContent = HINTS[t];
+    styleBar();
+  }
+  // Colour and line weight: change the selected mark, and become the choice for the next one.
+  function styleBar() {
+    const el = wrap.querySelector('#mk-style');
+    const m = marks[selected];
+    const editable = m && m.type !== 'hide';
+    // always takes the same room, so the picture never jumps while you draw
+    el.style.visibility = editable || tool === 'box' || tool === 'arrow' ? 'visible' : 'hidden';
+    const color = editable ? (m.color || MARK) : cur.color, width = editable ? (m.width || 'medium') : cur.width;
+    el.innerHTML = `<span class="hint" title="${editable ? 'Changes the selected mark and the next ones' : 'Used for the next marks'}">Style</span>
+      <span class="mk-sws" role="group" aria-label="Colour">${Object.entries(MARK_COLORS).map(([c, n]) => `<button type="button" class="mk-sw" data-color="${c}" aria-pressed="${c === color}" aria-label="${n}" title="${n}" style="--c:${c}"></button>`).join('')}</span>
+      <span class="seg" role="group" aria-label="Line weight">${Object.entries(MARK_WIDTHS).map(([w, n]) => `<button type="button" data-width="${w}" aria-pressed="${w === width}">${n}</button>`).join('')}</span>`;
   }
   const snapshot = () => { undo.push(JSON.stringify(marks)); if (undo.length > 50) undo.shift(); };
-  const refresh = () => { draw(); list(); };
+  const refresh = () => { draw(); list(); styleBar(); };
 
   // pointer interaction
   const toImg = (e) => { const r = canvas.getBoundingClientRect(); return { x: Math.max(0, Math.min(W, (e.clientX - r.left) / k)), y: Math.max(0, Math.min(H, (e.clientY - r.top) / k)) }; };
@@ -144,20 +161,32 @@ export async function openMarkup(shot, index, total, { onApply, onCancel, startT
     }
     return -1;
   }
+  // The square handle under the pointer on the selected mark: which coordinates it moves.
+  function handleAt(e) {
+    if (selected < 0 || !marks[selected]) return null;
+    const m = marks[selected], r = canvas.getBoundingClientRect(), tol = 10;
+    const near = (x, y) => Math.hypot(e.clientX - (r.left + x * k), e.clientY - (r.top + y * k)) <= tol;
+    if (m.type === 'arrow') return near(m.x1, m.y1) ? ['x1', 'y1'] : near(m.x2, m.y2) ? ['x2', 'y2'] : null;
+    const a = Math.min(m.x1, m.x2), b = Math.max(m.x1, m.x2), c = Math.min(m.y1, m.y2), d = Math.max(m.y1, m.y2);
+    return near(a, c) ? ['x1', 'y1'] : near(b, c) ? ['x2', 'y1'] : near(a, d) ? ['x1', 'y2'] : near(b, d) ? ['x2', 'y2'] : null;
+  }
   let drag = null;
   canvas.addEventListener('pointerdown', (e) => {
     canvas.setPointerCapture(e.pointerId);
     const p = toImg(e);
     if (tool === 'crop') { cropRect = { x1: p.x, y1: p.y, x2: p.x, y2: p.y }; drag = { mode: 'crop' }; draw(); return; }
+    const hh = handleAt(e);
+    if (hh) { snapshot(); const m = marks[selected]; if (m.type !== 'arrow') { const a = Math.min(m.x1, m.x2), b = Math.max(m.x1, m.x2), c = Math.min(m.y1, m.y2), d = Math.max(m.y1, m.y2); Object.assign(m, { x1: a, x2: b, y1: c, y2: d }); } drag = { mode: 'resize', which: hh }; return; }
     const h = hit(p);
     snapshot();
     if (h >= 0) { selected = h; drag = { mode: 'move', p, orig: { ...marks[h] } }; }
-    else { marks.push({ type: tool, x1: p.x, y1: p.y, x2: p.x, y2: p.y }); selected = marks.length - 1; drag = { mode: 'new' }; }
+    else { marks.push({ type: tool, x1: p.x, y1: p.y, x2: p.x, y2: p.y, ...(tool === 'hide' ? {} : { color: cur.color, width: cur.width }) }); selected = marks.length - 1; drag = { mode: 'new' }; }
     refresh();
   });
   canvas.addEventListener('pointermove', (e) => {
-    if (!drag) { canvas.style.cursor = tool !== 'crop' && hit(toImg(e)) >= 0 ? 'move' : 'crosshair'; return; }
+    if (!drag) { canvas.style.cursor = tool !== 'crop' && handleAt(e) ? 'nwse-resize' : tool !== 'crop' && hit(toImg(e)) >= 0 ? 'move' : 'crosshair'; return; }
     if (drag.mode === 'crop') { const p = toImg(e); cropRect.x2 = p.x; cropRect.y2 = p.y; draw(); return; }
+    if (drag.mode === 'resize') { const p = toImg(e), m = marks[selected]; m[drag.which[0]] = p.x; m[drag.which[1]] = p.y; draw(); return; }
     const p = toImg(e), m = marks[selected];
     if (drag.mode === 'new') { m.x2 = p.x; m.y2 = p.y; }
     else { const dx = p.x - drag.p.x, dy = p.y - drag.p.y; Object.assign(m, { x1: drag.orig.x1 + dx, x2: drag.orig.x2 + dx, y1: drag.orig.y1 + dy, y2: drag.orig.y2 + dy }); }
@@ -165,6 +194,7 @@ export async function openMarkup(shot, index, total, { onApply, onCancel, startT
   });
   const end = () => {
     if (!drag) return;
+    if (drag.mode === 'resize') { drag = null; refresh(); return; }
     if (drag.mode === 'crop') { if (Math.hypot(cropRect.x2 - cropRect.x1, cropRect.y2 - cropRect.y1) * k < 12) cropRect = null; drag = null; draw(); return; }
     const m = marks[selected];
     if (drag.mode === 'new' && Math.hypot(m.x2 - m.x1, m.y2 - m.y1) * k < 6) { marks.pop(); selected = marks.length - 1; undo.pop(); }
@@ -212,6 +242,12 @@ export async function openMarkup(shot, index, total, { onApply, onCancel, startT
   wrap.addEventListener('click', (e) => {
     const t = e.target.closest('button'); if (!t) return;
     if (t.dataset.tool) setTool(t.dataset.tool);
+    else if (t.dataset.color || t.dataset.width) {
+      const key = t.dataset.color ? 'color' : 'width', v = t.dataset.color || t.dataset.width, m = marks[selected];
+      cur[key] = v;
+      if (m && m.type !== 'hide') { snapshot(); m[key] = v; }
+      refresh(); canvas.focus();
+    }
     else if (t.dataset.mk === 'undo') { if (undo.length) { marks = JSON.parse(undo.pop()); selected = Math.min(selected, marks.length - 1); refresh(); } }
     else if (t.dataset.mk === 'cancel') { close(); onCancel && onCancel(); }
     else if (t.dataset.mk === 'apply') apply();

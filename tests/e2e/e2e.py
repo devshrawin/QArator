@@ -577,6 +577,23 @@ try:
             }""")
             check("markup: Hide area is real black pixels in saved image", frac["marked"][0] - frac["orig"][0] > 0.03, str(frac))
             check("markup: Box drawn in orange", frac["marked"][1] > 100, str(frac))
+            # edit it afterwards: pick the box, make it red and thick, drag its corner to resize
+            getm = lambda: panel.evaluate("async () => (await chrome.storage.local.get('draft')).draft.shots[0].marks")
+            m0 = getm()[0]
+            panel.click("[data-action=markup]"); panel.wait_for_selector("#mk-canvas"); panel.wait_for_timeout(400)
+            panel.click("[data-sel='0']"); panel.wait_for_timeout(200)
+            check("markup edit: colour and thickness controls show for a box", panel.locator("#mk-style [data-color]").count() == 6 and panel.locator("#mk-style [data-width]").count() == 3)
+            panel.click("#mk-style [data-color='#E5361F']"); panel.click("#mk-style [data-width='thick']"); panel.wait_for_timeout(200)
+            bb = panel.locator("#mk-canvas").bounding_box(); x, y, w, h = bb["x"], bb["y"], bb["width"], bb["height"]
+            k = w / panel.evaluate("() => document.getElementById('mk-canvas').width / (window.devicePixelRatio > 1 ? 2 : 1)") if False else None
+            panel.evaluate("() => document.getElementById('mk-canvas').focus()")
+            sx = x + w * .9; sy = y + h * .45
+            panel.mouse.move(sx, sy); panel.mouse.down(); panel.mouse.move(sx + w * .05, sy + h * .15, steps=6); panel.mouse.up()
+            panel.click("[data-mk=apply]"); panel.wait_for_timeout(1200)
+            m1 = getm()[0]
+            check("markup edit: colour changed on the selected mark", m1.get("color") == "#E5361F" and m1.get("width") == "thick", str(m1))
+            check("markup edit: corner handle resized the box", abs(m1["x2"] - m0["x2"]) > 5 or abs(m1["y2"] - m0["y2"]) > 5 or abs(m1["x1"] - m0["x1"]) > 5, f"{m0} -> {m1}")
+            check("markup edit: the hidden area was left alone", len(getm()) == 2)
         phase(markup)
 
         def recording():
@@ -837,7 +854,7 @@ try:
             op.wait_for_timeout(1500)
             opts = op.locator("#model option").all_inner_texts()
             check("options: Check key loads Gemini models (embedding filtered)", len(opts) == 3 and opts[0] == "Auto (recommended)" and not any("embedding" in o for o in opts), str(opts))
-            nav(op, "usage")
+            nav(op, "usage"); op.wait_for_timeout(700)
             ut = op.inner_text("#usage")
             op.locator("#usage").screenshot(path=os.path.join(OUT, "08-usage.png"))
             print("  usage section:\n   " + ut.replace("\n", "\n   ")[:1500])
@@ -852,7 +869,13 @@ try:
             op.wait_for_timeout(2500)
             opts = op.locator("#model option").all_inner_texts()
             check("options: OpenAI models load by themselves, Auto first", opts == ["Auto (recommended)", "gpt-4.1"], str(opts))
-            check("settings: one page at a time, with an icon on every menu item", op.locator(".nav-item svg").count() == 11 and op.locator("main > .sec:not([hidden])").count() == 2, f"{op.locator('.nav-item svg').count()} icons, {op.locator('main > .sec:not([hidden])').count()} pages shown")
+            check("settings: one page at a time, with an icon on every menu item", op.locator(".nav-item svg").count() == 12 and op.locator("main > .sec:not([hidden])").count() == 2, f"{op.locator('.nav-item svg').count()} icons, {op.locator('main > .sec:not([hidden])').count()} pages shown")
+            nav(op, "editor")
+            op.check("[data-path='editor.color'][value='#2F6FEB']"); op.wait_for_timeout(300)
+            op.check("[data-path='editor.width'][value='thick']"); op.wait_for_timeout(700)
+            edv = sw.evaluate("async () => (await chrome.storage.local.get('settings')).settings.editor")
+            check("settings: image editor colour and thickness are saved", edv == {"color": "#2F6FEB", "width": "thick"}, str(edv))
+            check("settings: the preview follows the choice", op.get_attribute("#ed-prev-box", "stroke") == "#2F6FEB" and op.get_attribute("#ed-prev-box", "stroke-width") == "5.4", str(op.get_attribute("#ed-prev-box", "stroke-width")))
             nav(op, "title")
             op.fill("#tproj", "UR2")
             op.wait_for_timeout(600)
