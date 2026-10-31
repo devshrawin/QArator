@@ -139,8 +139,8 @@ async function refreshQuota() {
   if (JSON.stringify(next) !== JSON.stringify(quota)) { quota = next; if (st.view === 'capture') render(); }
 }
 const quotaHtml = () => (quota ? `<div class="hint" role="status" id="quota" style="text-align:center;color:var(--acc-text)">${quota.level === 'out' ? '<strong>Quota running out.</strong> ' : '<strong>Running low.</strong> '}${esc(quota.text)}
-  ${quota.needBackup ? '<button type="button" class="btn b-ghost b-sm" data-action="settings" style="height:auto;padding:0 4px">Add a backup key</button>' : ''}
-  <button type="button" class="btn b-ghost b-sm" data-action="usage" style="height:auto;padding:0 4px">Usage</button></div>` : '');
+  ${quota.needBackup ? '<button type="button" class="btn btn-ghost btn-sm" data-action="settings" style="height:auto;padding:0 4px">Add a backup key</button>' : ''}
+  <button type="button" class="btn btn-ghost btn-sm" data-action="usage" style="height:auto;padding:0 4px">Usage</button></div>` : '');
 const modelLabel = () => (S.ai.model === AUTO ? 'Auto model' : S.ai.model);
 
 // What the AI is told about a bug: the current one, or one saved in the Bug list.
@@ -381,7 +381,7 @@ async function refreshBugCounts() {
   const list = await loadBugs();
   bugCounts = { all: list.length, ready: list.filter((b) => b.status === 'ready').length, busy: list.filter((b) => b.status === 'waiting' || b.status === 'writing').length };
   const n = bugCounts.ready + bugCounts.busy;
-  $('#btn-bugs').innerHTML = icon.list + (bugCounts.all ? `<span class="count" aria-label="${bugCounts.ready} ready">${bugCounts.ready || n}</span>` : '');
+  $('#btn-bugs').innerHTML = icon.list + (bugCounts.all ? `<span class="badge-count" aria-label="${bugCounts.ready} ready">${bugCounts.ready || n}</span>` : '');
   $('#btn-bugs').title = bugCounts.all ? `Bug list · ${bugCounts.ready} ready${bugCounts.busy ? `, ${bugCounts.busy} being written` : ''}` : 'Bug list';
 }
 // Save the current bug to the Bug list, have the AI write it in the background, start the next one.
@@ -614,7 +614,7 @@ function recBar() {
   if (!recording) return '';
   const s = recording.handle ? fmtDur(Date.now() - recording.started) : 'starting';
   return `<div class="rec" role="status"><span class="dotr" aria-hidden="true"></span><span style="flex:1">Recording screen · <span id="rec-t">${s}</span></span>
-    <button type="button" class="btn b-pri b-sm" data-action="stop-rec">Stop</button></div>`;
+    <button type="button" class="btn btn-primary btn-sm" data-action="stop-rec">Stop</button></div>`;
 }
 function startRecTimer() {
   clearInterval(recTick);
@@ -629,7 +629,7 @@ async function playVideo(id) {
   const host = $('#overlay');
   host.innerHTML = `<div class="vplay" role="dialog" aria-label="${esc(v.name)}"><video src="${url}" controls autoplay></video>
     <div style="color:#fff;font-size:12px">${esc(v.name)} · ${v.dur} · ${fmtSize(v.size)}</div>
-    <button type="button" class="btn b-sec" id="vclose">Close</button></div>`;
+    <button type="button" class="btn btn-secondary" id="vclose">Close</button></div>`;
   const close = () => { host.innerHTML = ''; URL.revokeObjectURL(url); };
   $('#vclose').onclick = close;
   $('#vclose').focus();
@@ -638,17 +638,20 @@ async function playVideo(id) {
 const videosHtml = () => (st.videos.length ? `<div><div class="lbl">Videos <span style="font-weight:400;color:var(--ink3)">${st.videos.length}</span></div><div class="shots">${st.videos.map((v, i) => `<div>
   <div class="shot-img vid"><img src="${v.thumb}" alt="Video ${i + 1}"><span class="dur">${v.dur}</span></div>
   <div class="shot-actions">
-    <button type="button" class="btn b-ghost b-sm" data-action="play-video" data-id="${v.id}" aria-label="Play video ${i + 1}">Play</button>
-    <button type="button" class="btn b-ghost b-sm" data-action="remove-video" data-id="${v.id}" aria-label="Remove video ${i + 1}">${icon.trash}Remove</button>
+    <button type="button" class="btn btn-ghost btn-sm" data-action="play-video" data-id="${v.id}" aria-label="Play video ${i + 1}">Play</button>
+    <button type="button" class="btn btn-ghost btn-sm" data-action="remove-video" data-id="${v.id}" aria-label="Remove video ${i + 1}">${icon.trash}Remove</button>
   </div><div class="hint">${fmtSize(v.size)}</div></div>`).join('')}</div></div>` : '');
-const recButtons = (sm = true) => `<button type="button" class="btn b-ghost ${sm ? 'b-sm' : ''}" data-action="record-screen" title="Record a screen, window or tab, with the mouse pointer (Alt+Shift+R)" ${recording ? 'disabled' : ''}>${icon.screen}Record screen</button>`;
+const recButtons = (sm = true) => `<button type="button" class="btn btn-ghost ${sm ? 'btn-sm' : ''}" data-action="record-screen" title="Record a screen, window or tab, with the mouse pointer (Alt+Shift+R)" ${recording ? 'disabled' : ''}>${icon.screen}Record screen</button>`;
 
 // Three steps, always visible: where you are and where you can go back to.
 function renderFlow() {
   const v = st.view === 'writing' ? 'capture' : st.view;
   const steps = [['capture', 'Capture', true], ['review', 'Review', !!st.report], ['filled', 'Fill in Zoho', !!st.fill]];
   const at = steps.findIndex((s) => s[0] === v);
-  $('#flow').innerHTML = v === 'history' ? '' : steps.map(([k, name, ok], i) => `<button type="button" data-action="flow" data-id="${k}" ${ok && st.view !== 'writing' ? '' : 'disabled'} ${i === at ? 'aria-current="step"' : ''} class="${i < at || (ok && i !== at) ? 'done' : ''}"><span class="n">${i < at && ok ? '✓' : i + 1}</span>${name}</button>`).join('');
+  $('#flow').innerHTML = v === 'history' || v === 'bugs' ? '' : steps.map(([k, name, ok], i) => {
+    const done = i < at && ok, cls = i === at ? 'is-current' : done ? 'is-done' : '';
+    return `${i ? `<span class="step-line ${i <= at && ok ? 'is-done' : ''}" aria-hidden="true"></span>` : ''}<button type="button" data-action="flow" data-id="${k}" ${ok && st.view !== 'writing' ? '' : 'disabled'} ${i === at ? 'aria-current="step"' : ''} class="step ${cls}"><span class="step-dot">${done ? '<svg class="ic" viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8.5l3 3 6-7"/></svg>' : i + 1}</span>${name}</button>`;
+  }).join('');
 }
 
 // ---------- views ----------
@@ -697,15 +700,15 @@ async function renderEmpty() {
   if (st.view !== 'capture' || st.shots.length || st.videos.length || st.noShot || recording) return;
   const setup = !onboarded && !S.ai.apiKey && S.ai.provider !== 'compatible';
   main.innerHTML = `
-  ${setup ? `<div class="alert" role="region" aria-label="Set up QArator"><span class="alert-icon">${icon.key}</span>
+  ${setup ? `<div class="banner banner-info alert" role="region" aria-label="Set up QArator"><span class="alert-icon">${icon.key}</span>
     <div style="flex:1;min-width:0"><h2>Set up QArator · 30 seconds</h2><p>Paste your AI key. QArator tests it for you; everything else is already set.</p>
-    <button type="button" class="btn b-pri b-sm" data-action="setup" style="margin-top:10px">Start setup</button></div></div>` : ''}
+    <button type="button" class="btn btn-primary btn-sm" data-action="setup" style="margin-top:10px">Start setup</button></div></div>` : ''}
   <div><h1 class="h1">Capture what's wrong</h1>
   <p class="hint" style="margin:4px 0 0">QArator saves the visible part of the tab with its URL and browser details${S.pageErrors ? ' and page errors' : ''}.</p></div>
-  <div class="stack">
-    <button type="button" class="btn b-acc wide" data-action="capture" style="height:44px;font-size:14px">${icon.capture} Capture visible area <span class="kbd" style="margin-left:4px">Alt+Shift+S</span></button>
-    ${recButtons(false).replace('btn b-ghost', 'btn b-sec wide')}
-    <button type="button" class="btn b-sec wide" data-action="file">${icon.image} Add image from file</button>
+  <div class="cap-grid">
+    <button type="button" class="cap-btn" data-action="capture" title="Capture visible area (Alt+Shift+S)">${icon.capture}Screenshot</button>
+    <button type="button" class="cap-btn" data-action="file">${icon.image}From file</button>
+    <button type="button" class="cap-btn" data-action="record-screen" title="Record a screen, window or tab (Alt+Shift+R)" ${recording ? 'disabled' : ''}>${icon.screen}Record</button>
   </div>
   <div class="drop-hint">${icon.paste}
     <div style="color:var(--ink)">Paste a screenshot with <span class="kbd">Ctrl</span> + <span class="kbd">V</span></div>
@@ -714,9 +717,9 @@ async function renderEmpty() {
   ${tab && /^https?:/.test(tab.url || '') ? `<div><div class="lbl">Current tab</div>
     <div style="display:flex;gap:8px;align-items:flex-start"><span style="color:var(--ink3);flex:none">${icon.globe}</span>
     <div style="min-width:0"><div class="mono url">${esc(tab.url)}</div><div class="hint" style="margin-top:2px">${esc(tab.title || '')}</div></div></div></div>` : ''}
-  <div><button type="button" class="btn b-ghost b-sm" data-action="noshot" style="margin-left:-8px">Describe a bug without a screenshot</button></div>
+  <div><button type="button" class="btn btn-ghost btn-sm" data-action="noshot" style="margin-left:-8px">Describe a bug without a screenshot</button></div>
   ${recent.length ? `<hr class="sep-line"><div>
-    <div class="lbl between">Recent reports <button type="button" class="btn b-ghost b-sm" data-action="history" style="margin-right:-8px">See all</button></div>
+    <div class="lbl between">Recent reports <button type="button" class="btn btn-ghost btn-sm" data-action="history" style="margin-right:-8px">See all</button></div>
     ${recent.map((h) => `<div class="hist-item"><div style="flex:1;min-width:0"><div class="t">${esc(h.title)}</div><div class="hint">${esc(h.status)} · ${fmtTime(h.at)}</div></div></div>`).join('')}
   </div>` : ''}`;
   dock.innerHTML = `<div class="hint" style="display:flex;flex-wrap:wrap;gap:6px 14px">
@@ -729,14 +732,14 @@ function errorBanner() {
   if (!e) return '';
   const wait = e.retryAt ? Math.max(0, Math.ceil((e.retryAt - Date.now()) / 1000)) : 0;
   const mmss = `${Math.floor(wait / 60)}:${String(wait % 60).padStart(2, '0')}`;
-  return `<div class="alert" role="alert">
+  return `<div class="banner ${e.kind === 'ratelimit' ? 'banner-warning' : 'banner-danger'} alert" role="alert">
     <span class="alert-icon">${icon.alert}</span>
     <div style="min-width:0;flex:1">
       <h2>${esc(e.title)}</h2><p>${esc(e.body)}</p>
       <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap">
-        <button type="button" class="btn b-pri b-sm" data-action="write" id="retry" ${wait ? 'aria-disabled="true"' : ''}>${wait ? `${orb('breathing', 20, '', true)}Try again in <span id="retry-t">${mmss}</span>` : 'Try again'}</button>
-        <button type="button" class="btn b-sec b-sm" data-action="settings">${e.kind === 'ratelimit' || e.kind === 'model' ? 'Change model' : 'Open settings'}</button>
-        <button type="button" class="btn b-ghost b-sm" data-action="dismiss-error">Dismiss</button>
+        <button type="button" class="btn btn-primary btn-sm" data-action="write" id="retry" ${wait ? 'aria-disabled="true"' : ''}>${wait ? `${orb('breathing', 20, '', true)}Try again in <span id="retry-t">${mmss}</span>` : 'Try again'}</button>
+        <button type="button" class="btn btn-secondary btn-sm" data-action="settings">${e.kind === 'ratelimit' || e.kind === 'model' ? 'Change model' : 'Open settings'}</button>
+        <button type="button" class="btn btn-ghost btn-sm" data-action="dismiss-error">Dismiss</button>
       </div>
       ${e.detail ? `<details style="margin-top:10px"><summary>Error details</summary><div class="mono" style="margin-top:6px;color:var(--ink2);font-size:11.5px;white-space:pre-wrap;word-break:break-word">${esc(e.detail)}</div></details>` : ''}
     </div></div>`;
@@ -746,12 +749,12 @@ function renderNoKey() {
   const e = st.error;
   main.className = 'center';
   main.innerHTML = `
-  <div style="width:44px;height:44px;border-radius:22px;background:var(--surface);display:flex;align-items:center;justify-content:center;color:var(--ink2)">${icon.key}</div>
+  <div style="width:44px;height:44px;border-radius:22px;background:var(--bg-muted);display:flex;align-items:center;justify-content:center;color:var(--ink2)">${icon.key}</div>
   <div role="alert"><h1 class="h1">${esc(e.title)}</h1><p style="margin:6px 0 0;color:var(--ink2)">${esc(e.body)}</p></div>
   <div class="stack">
-    <button type="button" class="btn b-pri wide" data-action="settings">Open settings</button>
-    <button type="button" class="btn b-sec wide" data-action="blank">Fill the sections myself</button>
-    <button type="button" class="btn b-ghost wide" data-action="dismiss-error">Back</button>
+    <button type="button" class="btn btn-primary btn-block" data-action="settings">Open settings</button>
+    <button type="button" class="btn btn-secondary btn-block" data-action="blank">Fill the sections myself</button>
+    <button type="button" class="btn btn-ghost btn-block" data-action="dismiss-error">Back</button>
   </div>
   <div class="hint">Your ${st.shots.length} screenshot${st.shots.length === 1 ? '' : 's'} and note are kept while you do this.</div>`;
   dock.innerHTML = '';
@@ -786,15 +789,15 @@ function renderCaptured() {
   <div>
     <div class="lbl between" style="margin-bottom:8px;flex-wrap:wrap"><span>Screenshots <span style="font-weight:400;color:var(--ink3)">${n}</span></span>
       <span style="display:flex;gap:2px;margin-right:-8px;flex-wrap:wrap">
-        <button type="button" class="btn b-ghost b-sm" data-action="capture" title="Capture visible area (Alt+Shift+S)">${icon.capture}Capture</button>
-        <button type="button" class="btn b-ghost b-sm" data-action="file">${icon.plus}Add</button>
+        <button type="button" class="btn btn-ghost btn-sm" data-action="capture" title="Capture visible area (Alt+Shift+S)">${icon.capture}Capture</button>
+        <button type="button" class="btn btn-ghost btn-sm" data-action="file">${icon.plus}Add</button>
         ${recButtons()}
       </span></div>
     ${n ? `<div class="shots">${st.shots.map((s, i) => `<div>
       <div class="shot-img"><img src="${s.thumb}" alt="Screenshot ${i + 1}">${s.marks.length ? '<span class="badge">Marked up</span>' : ''}</div>
       <div class="shot-actions">
-        <button type="button" class="btn b-ghost b-sm" data-action="markup" data-id="${s.id}" aria-label="Mark up screenshot ${i + 1}">${icon.pen}Mark up</button>
-        <button type="button" class="btn b-ghost b-sm" data-action="remove" data-id="${s.id}" aria-label="Remove screenshot ${i + 1}">${icon.trash}Remove</button>
+        <button type="button" class="btn btn-ghost btn-sm" data-action="markup" data-id="${s.id}" aria-label="Mark up screenshot ${i + 1}">${icon.pen}Mark up</button>
+        <button type="button" class="btn btn-ghost btn-sm" data-action="remove" data-id="${s.id}" aria-label="Remove screenshot ${i + 1}">${icon.trash}Remove</button>
       </div></div>`).join('')}</div>`
       : st.videos.length ? '' : `<div class="drop-hint"><div class="hint">No screenshot. Paste one with Ctrl+V, or describe the bug below.</div></div>`}
   </div>
@@ -812,22 +815,22 @@ function renderCaptured() {
     <div class="hint" style="margin-top:4px">One line is enough. QArator reads the screenshots for the rest.</div>
   </div>
   <div>
-    <button type="button" class="btn b-ghost b-sm" data-action="toggle-steps" aria-expanded="${st.stepsOpen}" style="margin-left:-8px;color:var(--ink2)">
+    <button type="button" class="btn btn-ghost btn-sm" data-action="toggle-steps" aria-expanded="${st.stepsOpen}" style="margin-left:-8px;color:var(--ink2)">
       <span style="display:inline-flex;transform:${st.stepsOpen ? 'rotate(90deg)' : 'none'}">${icon.chevron}</span>Add your steps <span style="color:var(--ink3)">optional</span></button>
     ${st.stepsOpen ? `<label class="hint" for="steps" style="display:block;margin:6px 0 4px">One step per line. QArator keeps your wording.</label>
     ${beam(`<textarea id="steps" class="field" rows="4" data-bind="steps" placeholder="Open SEVI Dashboard&#10;Turn on dark mode">${esc(st.steps)}</textarea>`)}` : ''}
   </div>
   ${n || st.note ? '' : ''}
-  <div><button type="button" class="btn b-ghost b-sm" data-action="reset" style="margin-left:-8px">Start over</button></div>`;
+  <div><button type="button" class="btn btn-ghost btn-sm" data-action="reset" style="margin-left:-8px">Start over</button></div>`;
   const nv = st.videos.length;
   dock.innerHTML = `
   <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px">
-    <button type="button" class="btn b-pri" data-action="write" data-needs-note style="height:40px" ${recording || needNote() ? 'aria-disabled="true"' : ''} title="Write the report now (Ctrl+Enter)">Generate report</button>
-    <button type="button" class="btn b-sec" data-action="generate-later" data-needs-note style="height:40px" ${recording || needNote() ? 'aria-disabled="true"' : ''} title="Write it in the background and start the next bug (Ctrl+Shift+Enter)">Generate &amp; next bug</button>
+    <button type="button" class="btn btn-primary" data-action="write" data-needs-note style="height:40px" ${recording || needNote() ? 'aria-disabled="true"' : ''} title="Write the report now (Ctrl+Enter)">Generate report</button>
+    <button type="button" class="btn btn-secondary" data-action="generate-later" data-needs-note style="height:40px" ${recording || needNote() ? 'aria-disabled="true"' : ''} title="Write it in the background and start the next bug (Ctrl+Shift+Enter)">Save and capture next</button>
   </div>
-  <button type="button" class="btn b-sec wide b-sm" data-action="export-word" data-needs-note ${recording || needNote() ? 'aria-disabled="true"' : ''}>${icon.download}Export to Word without AI</button>
-  <div class="hint" id="need-note" style="text-align:center;color:var(--acc-text)" ${needNote() ? '' : 'hidden'}>Add what's wrong to continue.</div>
-  <div class="hint" style="text-align:center">Sends ${n ? `${n} screenshot${n === 1 ? '' : 's'}, ` : ''}${nv ? `frames of ${nv} video${nv === 1 ? '' : 's'}, ` : ''}your note${S.pageErrors && st.page?.errorsIncluded ? ', page errors' : ''}${st.page ? ' and the page address' : ''} to ${esc(providerName())} · ${esc(modelLabel())}.</div>
+  <button type="button" class="btn btn-secondary btn-block btn-sm" data-action="export-word" data-needs-note ${recording || needNote() ? 'aria-disabled="true"' : ''}>${icon.download}Export to Word</button>
+  <div class="hint" id="need-note" style="text-align:center;color:var(--acc-text)" ${needNote() ? '' : 'hidden'}>Add one line about what went wrong to continue.</div>
+  <div class="hint" style="text-align:center">Sends ${n ? `${n} screenshot${n === 1 ? '' : 's'}, ` : ''}${nv ? `frames of ${nv} video${nv === 1 ? '' : 's'}, ` : ''}your note${S.pageErrors && st.page?.errorsIncluded ? ', page errors' : ''}${st.page ? ' and the page address' : ''} to ${esc(providerName())}. Nothing else.</div>
   ${quotaHtml()}`;
   after();
   startRetryTimer();
@@ -854,8 +857,8 @@ function renderWriting() {
   ];
   const stepHtml = steps.map((t, i) => {
     const done = i < ph, cur = i === ph;
-    return `<div class="step"><span class="dot">${done ? icon.check : cur ? orb(i === 2 ? 'searching' : 'working', 20) : '<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>'}</span>
-      <span style="${cur ? 'font-weight:600' : done ? 'color:var(--ink2)' : 'color:var(--ink3)'}">${esc(t)}</span></div>`;
+    return `<div class="think-step ${done ? 'is-done' : cur ? 'is-now' : ''}"><span class="tick">${done ? icon.check : cur ? orb(i === 2 ? 'searching' : 'working', 20) : '<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>'}</span>
+      <span>${esc(t)}</span></div>`;
   }).join('');
   main.innerHTML = `
   ${n || st.note ? `<div style="display:flex;gap:12px;align-items:flex-start">
@@ -865,13 +868,13 @@ function renderWriting() {
     ${orb('composing', 64, 'Writing')}
     <div><h1 class="h1">Writing your bug report</h1><p class="hint" style="margin:4px 0 0">You can keep testing in the tab. The report opens here when it's ready.</p></div>
   </div>
-  <div>${stepHtml}</div>
+  <div class="card" style="padding:10px 12px;display:flex;flex-direction:column;gap:2px">${stepHtml}</div>
   <div class="skel" aria-hidden="true">
     <div><div class="lbl">Title</div><div class="bar" style="width:92%"></div><div class="bar" style="width:64%;margin-top:8px"></div></div>
     <div><div class="lbl">Summary</div><div class="bar"></div><div class="bar" style="width:96%;margin-top:8px"></div><div class="bar" style="width:58%;margin-top:8px"></div></div>
     <div><div class="lbl">Steps to reproduce</div><div class="bar" style="width:74%"></div><div class="bar" style="width:62%;margin-top:8px"></div><div class="bar" style="width:80%;margin-top:8px"></div></div>
   </div>`;
-  dock.innerHTML = `<button type="button" class="btn b-sec wide" data-action="cancel">Cancel <span class="kbd" style="margin-left:4px">Esc</span></button>
+  dock.innerHTML = `<button type="button" class="btn btn-secondary btn-block" data-action="cancel">Cancel <span class="kbd" style="margin-left:4px">Esc</span></button>
   <div class="hint" style="text-align:center">Your screenshots and note stay here if you cancel.</div>`;
   after();
 }
@@ -890,6 +893,20 @@ function updateTitlePreview() {
   setProj();
 }
 
+const CHEV = '<svg class="ic ic-14 chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6l4 4 4-4"/></svg>';
+const provOf = (id) => { const r = st.report; return !r.fields[id] ? 'empty' : r.aiChosen[id] ? 'ai' : r.touched && r.touched[id] ? 'you' : 'default'; };
+const provCls = (id) => ({ ai: 'is-ai', empty: 'is-empty' })[provOf(id)] || '';
+const provHtml = (id) => {
+  const k = provOf(id);
+  const sparkle = '<svg class="ic" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2.5l1.3 3.2 3.2 1.3-3.2 1.3L8 11.5 6.7 8.3 3.5 7l3.2-1.3z"/></svg>';
+  const user = '<svg class="ic" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 7.5a2.5 2.5 0 1 0 0-5a2.5 2.5 0 1 0 0 5 M3 13.5c.6-2.3 2.6-3.6 5-3.6s4.4 1.3 5 3.6"/></svg>';
+  return `<span class="prov prov-${k === 'default' ? 'empty' : k}" id="prov-${id}" title="${({ ai: 'Chosen by AI', you: 'Changed by you', empty: 'Left empty', default: 'Team default' })[k]}">${k === 'ai' ? sparkle + 'AI' : k === 'you' ? user + 'You' : k === 'empty' ? 'Empty' : 'Default'}</span>`;
+};
+function setProv(id) {
+  const box = $(`#sel-${id}`); if (box) box.className = `select ${provCls(id)}`;
+  const old = $(`#prov-${id}`); if (old) old.outerHTML = provHtml(id);
+}
+
 function renderReview() {
   const r = st.report;
   const segLabel = { project: 'Project', portal: 'Portal', module: 'Module', page: 'Page', summary: 'Summary' };
@@ -900,25 +917,23 @@ function renderReview() {
     const busy = st.busy === 'rewrite:' + s.id;
     return `<div><div class="lbl between"><label for="sec-${s.id}">${esc(s.name)}</label>
       ${!isText(s.layout) ? `<span class="hint" style="font-weight:400;margin-left:auto">One per line</span>` : ''}
-      <button type="button" class="btn b-ghost b-sm" data-action="rewrite" data-id="${s.id}" aria-label="Rewrite ${esc(s.name)}" style="margin-right:-8px" ${st.busy ? 'disabled' : ''}>${busy ? orb('composing', 20) + 'Rewriting…' : 'Rewrite'}</button></div>
+      <button type="button" class="btn btn-ghost btn-sm" data-action="rewrite" data-id="${s.id}" aria-label="Rewrite ${esc(s.name)}" style="margin-right:-8px" ${st.busy ? 'disabled' : ''}>${busy ? orb('composing', 20) + 'Rewriting…' : 'Rewrite'}</button></div>
       ${beam(`<textarea id="sec-${s.id}" class="field" rows="${rows}" data-sec="${s.id}">${esc(s.text)}</textarea>`)}</div>`;
   }).join('');
   const fields = S.fields.map((f) => {
     const val = r.fields[f.id] || '';
     const opts = f.options.includes(val) || !val ? f.options : [val, ...f.options];
-    return `<div><label class="slbl" for="fld-${f.id}">${esc(f.name)}${r.aiChosen[f.id] ? '<span class="ai-tag" title="Chosen by AI">AI</span>' : ''}</label>
-      <select id="fld-${f.id}" class="field" data-field="${f.id}"><option value=""${val ? '' : ' selected'}>— Leave empty —</option>${opts.map((o) => `<option${o === val ? ' selected' : ''}>${esc(o)}</option>`).join('')}</select></div>`;
+    return `<div><div class="field-label" style="margin-bottom:3px"><label for="fld-${f.id}" class="ellipsis">${esc(f.name)}</label>${provHtml(f.id)}</div>
+      <div class="select ${provCls(f.id)}" id="sel-${f.id}"><select id="fld-${f.id}" data-field="${f.id}"><option value=""${val ? '' : ' selected'}>— Leave empty —</option>${opts.map((o) => `<option${o === val ? ' selected' : ''}>${esc(o)}</option>`).join('')}</select>${CHEV}</div></div>`;
   }).join('');
   main.innerHTML = `
-  <div style="display:flex;align-items:center;justify-content:space-between;margin:-8px -8px -8px -8px">
-    <button type="button" class="btn b-ghost b-sm" data-action="back-capture">${icon.back}Screenshots and note</button>
-    <span class="hint" style="margin-right:8px">${r.model ? `Written by ${esc(r.model)} · ` : ''}Draft · not submitted</span></div>
+  <div style="margin:-8px"><button type="button" class="btn btn-ghost btn-sm" data-action="back-capture">${icon.back}Screenshots and note</button></div>
   <section aria-labelledby="h-title">
     <div class="row-between"><h2 class="h2" id="h-title">Title</h2><span class="hint" id="title-count">${countHtml()}</span></div>
     <div class="grid2" style="margin-top:10px">${segInputs}</div>
     <div class="preview">
       <div class="row-between" style="align-items:center"><span class="lab">Preview</span>
-        <button type="button" class="ib" data-action="copy-title" aria-label="Copy title" style="width:28px;height:28px">${icon.copy}</button></div>
+        <button type="button" class="btn btn-icon" data-action="copy-title" aria-label="Copy title" style="width:28px;height:28px">${icon.copy}</button></div>
       <div class="preview-text" id="title-preview" aria-live="polite">${titleHtml()}</div>
     </div>
   </section>
@@ -926,11 +941,11 @@ function renderReview() {
     <h2 class="h2" id="h-desc" style="margin-bottom:-6px">Description</h2>${sections}
   </section>
   <section aria-labelledby="h-fld">
-    <div class="row-between"><h2 class="h2" id="h-fld">Issue fields</h2><span class="hint"><span class="ai-tag">AI</span> chosen by AI</span></div>
+    <div class="row-between"><h2 class="h2" id="h-fld">Issue fields</h2><span class="hint">${S.fields.length ? 'Pick “Leave empty” to skip a field' : ''}</span></div>
     <div class="grid2" style="margin-top:10px;gap:12px 10px">${fields}</div>
   </section>
   <section aria-labelledby="h-tag">
-    <div class="row-between"><h2 class="h2" id="h-tag">Tags</h2><span class="hint">${S.zoho.fillTags ? 'Ticked tags are added in Zoho' : 'You add tags in Zoho; copy them after filling'}</span></div>
+    <div class="row-between"><h2 class="h2" id="h-tag">Tags</h2><span class="hint">${S.zoho.fillTags ? 'Ticked tags are added in Zoho' : 'Zoho does not take tags from forms. After filling, copy them into Zoho’s Tags field.'}</span></div>
     <div id="tp-chips" class="chips" aria-live="polite"></div>
     <div style="margin-top:8px">${beam(`<input class="field" id="tp-q" type="search" autocomplete="off" aria-label="Search your team's tags" placeholder="Search tags, e.g. schemes">`)}</div>
     <div id="tp-list" class="tplist" role="group" aria-label="Team tags"></div>
@@ -940,22 +955,23 @@ function renderReview() {
     <span class="hint">${[st.shots.length ? `${st.shots.length} screenshot${st.shots.length === 1 ? '' : 's'}` : '', st.videos.length ? `${st.videos.length} video${st.videos.length === 1 ? '' : 's'}` : ''].filter(Boolean).join(' and ')}${S.zoho.uploadScreenshots ? ', uploaded when you fill the form' : ''}</span></div></section>` : ''}`;
   const z = st.zoho;
   const banner = !z ? '' : z.kind === 'notzoho'
-    ? `<div class="alert" role="alert"><span class="alert-icon">${icon.alert}</span><div><h2>Open the Zoho Submit Issue form first</h2>
-       <p>The active tab is ${esc(z.active || 'not Zoho')}. ${z.zohoTabId ? 'Switch to your Zoho Projects tab' : 'Open Zoho Projects'}, go to Issues › Submit Issue, then press Fill Zoho form again.</p></div></div>`
+    ? `<div class="banner banner-warning alert" role="alert"><span class="alert-icon">${icon.alert}</span><div><h2>Open the Zoho Submit Issue form first</h2>
+       <p>The active tab is ${esc(z.active || 'not Zoho')}. ${z.zohoTabId ? 'Switch to your Zoho Projects tab' : 'Open Zoho Projects'}, go to Issues › Submit Issue, then press Fill in Zoho again.</p></div></div>`
     : z.kind === 'noform'
-      ? `<div class="alert" role="alert"><span class="alert-icon">${icon.alert}</span><div><h2>No Submit Issue form found on this tab</h2>
-       <p>Open Issues › Submit Issue in Zoho so the form is on screen, then press Fill Zoho form again. If the form is open, check the title label in settings › Zoho fill options.</p></div></div>`
-      : `<div class="alert" role="alert"><span class="alert-icon">${icon.alert}</span><div><h2>Chrome blocked access to this tab</h2>
+      ? `<div class="banner banner-warning alert" role="alert"><span class="alert-icon">${icon.alert}</span><div><h2>No Submit Issue form found on this tab</h2>
+       <p>Open Issues › Submit Issue in Zoho so the form is on screen, then press Fill in Zoho again. If the form is open, check the title label in settings › Zoho fill options.</p></div></div>`
+      : `<div class="banner banner-warning alert" role="alert"><span class="alert-icon">${icon.alert}</span><div><h2>Chrome blocked access to this tab</h2>
        <p>Reload the Zoho tab and try again.</p><div class="mono" style="font-size:11px;margin-top:4px">${esc(z.detail || '')}</div></div></div>`;
   const filling = st.busy === 'fill';
   dock.innerHTML = `${banner}
-  ${z && z.kind === 'notzoho' ? `<button type="button" class="btn b-sec wide" data-action="open-zoho">${z.zohoTabId ? 'Switch to Zoho tab' : 'Open Zoho Projects'} ${icon.external}</button>` : ''}
-  ${`<button type="button" class="btn b-pri wide" data-action="fill" style="height:40px" ${filling ? 'aria-disabled="true"' : ''}>${filling ? orb('working', 20, '', true) + 'Filling Zoho form…' : 'Fill Zoho form <span class="kbd" style="margin-left:4px">Ctrl+Enter</span>'}</button>`}
+  <div class="foot-meta"><span class="badge badge-draft">Draft</span><span class="ellipsis">${r.model ? `Written by <span class="mono">${esc(r.model)}</span> · ` : ''}not submitted</span></div>
+  ${z && z.kind === 'notzoho' ? `<button type="button" class="btn btn-secondary btn-block" data-action="open-zoho">${z.zohoTabId ? 'Switch to Zoho tab' : 'Open Zoho Projects'} ${icon.external}</button>` : ''}
+  ${`<button type="button" class="btn btn-primary btn-block" data-action="fill" style="height:40px" ${filling ? 'aria-disabled="true"' : ''}>${filling ? orb('working', 20, '', true) + 'Filling Zoho form…' : icon.fill + 'Fill in Zoho <span class="kbd" style="margin-left:4px">Ctrl+Enter</span>'}</button>`}
   <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px">
-    <button type="button" class="btn b-sec b-sm" data-action="copy-title">${icon.copy}Copy title</button>
-    <button type="button" class="btn b-sec b-sm" data-action="copy-desc">${icon.copy}Copy description</button>
-    <button type="button" class="btn b-sec b-sm" data-action="export-word">${icon.download}Export to Word</button>
-    <button type="button" class="btn b-sec b-sm" data-action="save-shots" ${st.shots.length || st.videos.length ? '' : 'disabled'}>${icon.download}Save files</button>
+    <button type="button" class="btn btn-secondary btn-sm" data-action="copy-title">${icon.copy}Copy title</button>
+    <button type="button" class="btn btn-secondary btn-sm" data-action="copy-desc">${icon.copy}Copy description</button>
+    <button type="button" class="btn btn-secondary btn-sm" data-action="export-word">${icon.download}Export to Word</button>
+    <button type="button" class="btn btn-secondary btn-sm" data-action="save-shots" ${st.shots.length || st.videos.length ? '' : 'disabled'}>${icon.download}Save files</button>
   </div>`;
   refreshTags();
   after();
@@ -965,9 +981,9 @@ function tagsHtml() {
   const list = tagSuggestions();
   if (!list.length) return '';
   return `<section aria-labelledby="h-tags2"><div class="row-between"><div class="lbl" id="h-tags2" style="margin:0">Tags to add in Zoho · ${list.length}</div>
-    <button type="button" class="btn b-ghost b-sm" data-action="copy-tags" style="margin-right:-8px">${icon.copy}Copy all</button></div>
+    <button type="button" class="btn btn-ghost btn-sm" data-action="copy-tags" style="margin-right:-8px">${icon.copy}Copy all</button></div>
     <div class="hint" style="margin:2px 0 4px">From your team's tag list. Copy one at a time and paste it into Zoho's tag box, or pick your own there.</div>
-    ${list.map((t, i) => `<div class="tagrow"><span>${esc(t)}</span><button type="button" class="btn b-sec b-sm" data-action="copy-tag" data-id="${i}" aria-label="Copy tag ${esc(t)}">${icon.copy}Copy</button></div>`).join('')}</section>`;
+    ${list.map((t, i) => `<div class="tagrow"><span>${esc(t)}</span><button type="button" class="btn btn-secondary btn-sm" data-action="copy-tag" data-id="${i}" aria-label="Copy tag ${esc(t)}">${icon.copy}Copy</button></div>`).join('')}</section>`;
 }
 
 function renderFilled() {
@@ -976,14 +992,15 @@ function renderFilled() {
   const filled = res.filter((r) => r.status === 'filled');
   const kept = res.filter((r) => r.status === 'kept');
   main.innerHTML = `
-  <div role="status"><h1 class="h1">${checks.length ? `Form filled. Check ${checks.length} field${checks.length === 1 ? '' : 's'} before you submit.` : 'Form filled. Review it, then submit in Zoho.'}</h1>
-  <p class="hint" style="margin:4px 0 0">Review the form in the Zoho tab, then press Submit there. QArator never submits for you.</p></div>
+  <div role="status"><span style="width:40px;height:40px;border-radius:50%;background:${checks.length ? 'var(--warning-soft)' : 'var(--success-soft)'};color:${checks.length ? 'var(--warning)' : 'var(--success)'};display:flex;align-items:center;justify-content:center;margin-bottom:12px">${checks.length ? icon.alert : icon.check}</span>
+  <h1 class="h1">${checks.length ? `Filled in Zoho. Check ${checks.length} field${checks.length === 1 ? '' : 's'}, then press Submit.` : 'Filled in Zoho. Check it and press Submit.'}</h1>
+  <p class="hint" style="margin:6px 0 0">QArator never submits for you. Look over the form in the Zoho tab, then press Submit there.</p></div>
   ${checks.length ? `<section><div class="lbl" style="color:var(--acc-text)">Needs a manual check · ${checks.length}</div>
     ${checks.map((c) => `<div class="check-item"><span class="alert-icon" style="margin-top:2px">${icon.alert}</span>
       <div style="flex:1;min-width:0"><div style="font-weight:600">${esc(c.field)}${c.value ? `: <span style="font-weight:400">${esc(c.value)}</span>` : ''}</div>
       <div style="font-size:12px;color:var(--ink2);margin-top:2px">${esc(c.reason || '')}</div>
-      ${c.options && c.options.length ? `<button type="button" class="btn b-sec b-sm" data-action="use-zoho-options" data-name="${esc(c.field)}" style="margin-top:6px">Use Zoho's list for ${esc(c.field)}</button>` : ''}</div>
-      ${c.missing ? '' : `<button type="button" class="btn b-sec b-sm" data-action="goto" data-name="${esc(c.field)}" aria-label="Go to ${esc(c.field)} in Zoho" style="flex:none">Go to field</button>`}</div>`).join('')}</section>` : ''}
+      ${c.options && c.options.length ? `<button type="button" class="btn btn-secondary btn-sm" data-action="use-zoho-options" data-name="${esc(c.field)}" style="margin-top:6px">Use Zoho's list for ${esc(c.field)}</button>` : ''}</div>
+      ${c.missing ? '' : `<button type="button" class="btn btn-secondary btn-sm" data-action="goto" data-name="${esc(c.field)}" aria-label="Go to ${esc(c.field)} in Zoho" style="flex:none">Go to field</button>`}</div>`).join('')}</section>` : ''}
   <section><div class="lbl">Filled · ${filled.length}</div>
     ${filled.map((d) => `<div class="res-row"><span role="img" aria-label="Filled" style="color:var(--ink2);display:inline-flex">${icon.check}</span><span class="name">${esc(d.field)}</span><span class="hint val" title="${esc(d.value || '')}">${esc(d.value || '')}</span></div>`).join('') || '<div class="hint">Nothing was filled.</div>'}
   </section>
@@ -992,16 +1009,16 @@ function renderFilled() {
   ${tagsHtml()}
   <div class="callout" id="change">
     <div class="h2">Need to change something?</div>
-    <div class="hint" style="color:var(--ink2)">Press <strong>Edit report</strong>, change the title, text, fields or tags, then press <strong>Fill Zoho form</strong> again. QArator types over what it filled before. Nothing is lost while the Zoho form is open.</div>
-    <div><button type="button" class="btn b-sec b-sm" data-action="back-review">${icon.pen}Edit report</button></div>
+    <div class="hint" style="color:var(--ink2)">Press <strong>Edit report</strong>, change the title, text, fields or tags, then press <strong>Fill in Zoho</strong> again. QArator types over what it filled before. Nothing is lost while the Zoho form is open.</div>
+    <div><button type="button" class="btn btn-secondary btn-sm" data-action="back-review">${icon.pen}Edit report</button></div>
   </div>`;
   dock.innerHTML = `
   <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px">
-    <button type="button" class="btn b-sec" data-action="back-review">${icon.pen}Edit report</button>
-    <button type="button" class="btn b-sec" data-action="fill">Fill again</button>
+    <button type="button" class="btn btn-secondary" data-action="back-review">${icon.pen}Edit report</button>
+    <button type="button" class="btn btn-secondary" data-action="fill">Fill again</button>
   </div>
-  ${bugCounts.ready ? `<button type="button" class="btn b-pri wide" data-action="next-ready" style="height:40px">Next ready bug from the list · ${bugCounts.ready}</button>
-  <button type="button" class="btn b-ghost wide b-sm" data-action="next">Done · capture a new bug</button>` : `<button type="button" class="btn b-pri wide" data-action="next" style="height:40px">Done · start next bug</button>`}`;
+  ${bugCounts.ready ? `<button type="button" class="btn btn-primary btn-block" data-action="next-ready" style="height:40px">Next ready bug from the list · ${bugCounts.ready}</button>
+  <button type="button" class="btn btn-ghost btn-block btn-sm" data-action="next">Done · capture a new bug</button>` : `<button type="button" class="btn btn-primary btn-block" data-action="next" style="height:40px">Done · start next bug</button>`}`;
   after();
 }
 
@@ -1013,8 +1030,8 @@ async function renderBugs() {
   const titleOf = (b) => (b.report ? buildTitle(b.report, S) : bugNote(b));
   main.innerHTML = `
   <div style="display:flex;align-items:center;justify-content:space-between;margin:-8px">
-    <button type="button" class="btn b-ghost b-sm" data-action="bugs-back">${icon.back}Back</button>
-    ${list.some((b) => b.status === 'filled') ? '<button type="button" class="btn b-ghost b-sm" data-action="bugs-clear-filled">Remove filled bugs</button>' : ''}</div>
+    <button type="button" class="btn btn-ghost btn-sm" data-action="bugs-back">${icon.back}Back</button>
+    ${list.some((b) => b.status === 'filled') ? '<button type="button" class="btn btn-ghost btn-sm" data-action="bugs-clear-filled">Remove filled bugs</button>' : ''}</div>
   <div><h1 class="h1">Bug list</h1>
   <p class="hint" style="margin:4px 0 0">Bugs saved with Generate &amp; next bug. QArator writes them one by one while this panel is open. Open a ready bug to review it and fill Zoho.</p></div>
   ${list.length ? `<label class="chk inline" style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:-12px"><input type="checkbox" id="bsel-all" ${bugSel.size === list.length ? 'checked' : ''}>Select all</label>` : ''}
@@ -1023,23 +1040,24 @@ async function renderBugs() {
     return `<div class="bug"><input type="checkbox" data-bsel="${b.id}" ${bugSel.has(b.id) ? 'checked' : ''} aria-label="Select bug ${i + 1}" style="margin-top:3px;flex:none;width:16px;height:16px;accent-color:var(--pri)">
       ${thumb ? `<img src="${thumb}" alt="">` : ''}
       <div style="flex:1;min-width:0"><div class="t">${esc(titleOf(b))}</div>
-        <div class="hint" style="margin-top:3px;display:flex;flex-wrap:wrap;gap:4px 8px;align-items:center"><span class="st ${b.status}">${b.status === 'writing' ? orb('working', 20) : ''}${STATUS[b.status] || b.status}</span>${when(b.at)}</div>
+        <div class="hint" style="margin-top:3px;display:flex;flex-wrap:wrap;gap:4px 8px;align-items:center"><span class="badge ${BADGE[b.status] || ''}">${STATUS[b.status] || b.status}</span>${when(b.at)}</div>
         ${b.status === 'failed' && b.error ? `<div class="hint" style="margin-top:3px;color:var(--acc-text)">${esc(b.error.title)}</div>` : ''}
         ${b.status === 'waiting' && b.error && b.retryAt ? `<div class="hint" style="margin-top:3px;color:var(--acc-text)">${esc(b.error.title)}. Next try at ${fmtTime(b.retryAt)}.</div>` : ''}
         <div style="display:flex;gap:4px;margin:6px 0 0 -8px;flex-wrap:wrap">
-          <button type="button" class="btn b-sec b-sm" data-action="bug-open" data-id="${b.id}" ${b.status === 'writing' ? 'disabled' : ''}>${b.status === 'ready' || b.status === 'filled' ? 'Open report' : 'Open'}</button>
-          ${b.status === 'failed' ? `<button type="button" class="btn b-ghost b-sm" data-action="bug-retry" data-id="${b.id}">Try again</button>` : ''}
-          <button type="button" class="btn b-ghost b-sm" data-action="bug-remove" data-id="${b.id}" aria-label="Remove bug ${i + 1}">${icon.trash}Remove</button>
+          <button type="button" class="btn btn-secondary btn-sm" data-action="bug-open" data-id="${b.id}" ${b.status === 'writing' ? 'disabled' : ''}>${b.status === 'ready' || b.status === 'filled' ? 'Open report' : 'Open'}</button>
+          ${b.status === 'failed' ? `<button type="button" class="btn btn-ghost btn-sm" data-action="bug-retry" data-id="${b.id}">Try again</button>` : ''}
+          <button type="button" class="btn btn-ghost btn-sm" data-action="bug-remove" data-id="${b.id}" aria-label="Remove bug ${i + 1}">${icon.trash}Remove</button>
         </div></div></div>`;
   }).join('') : '<p class="hint">No saved bugs. On the capture screen, add a screenshot and what\'s wrong, then press Generate &amp; next bug.</p>'}</div>`;
   dock.innerHTML = list.length ? bugsDock() : '';
   after();
 }
+const BADGE = { ready: 'badge-draft', filled: 'badge-filled', writing: 'badge-writing', waiting: 'badge-writing', failed: 'badge-failed', exported: 'badge-exported' };
 const bugsDock = () => {
   const n = bugSel.size;
   return `<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px">
-    <button type="button" class="btn b-pri" data-action="bugs-export-full" ${n ? '' : 'aria-disabled="true"'}>${icon.download}Export ${n || ''} full bug${n === 1 ? '' : 's'}</button>
-    <button type="button" class="btn b-sec" data-action="bugs-export-notes" ${n ? '' : 'aria-disabled="true"'}>${icon.download}Notes only</button></div>
+    <button type="button" class="btn btn-primary" data-action="bugs-export-full" ${n ? '' : 'aria-disabled="true"'}>${icon.download}Export ${n || ''} full bug${n === 1 ? '' : 's'}</button>
+    <button type="button" class="btn btn-secondary" data-action="bugs-export-notes" ${n ? '' : 'aria-disabled="true"'}>${icon.download}Notes only</button></div>
   <div class="hint" style="text-align:center">${n ? 'One Word file, a page per bug.' : 'Tick bugs to export them.'} Full: the written report with screenshots. Notes only: page address, screenshots and what's wrong.</div>`;
 };
 async function exportBugList(full) {
@@ -1059,19 +1077,19 @@ async function renderHistory() {
   for (const id of [...histSel]) if (!list.some((h) => String(h.id) === id)) histSel.delete(id);
   main.innerHTML = `
   <div style="display:flex;align-items:center;justify-content:space-between;margin:-8px">
-    <button type="button" class="btn b-ghost b-sm" data-action="history-back">${icon.back}Back</button>
-    ${list.length ? '<button type="button" class="btn b-ghost b-sm" data-action="history-clear">Clear list</button>' : ''}</div>
+    <button type="button" class="btn btn-ghost btn-sm" data-action="history-back">${icon.back}Back</button>
+    ${list.length ? '<button type="button" class="btn btn-ghost btn-sm" data-action="history-clear">Clear list</button>' : ''}</div>
   <h1 class="h1">Recent reports</h1>
   ${list.length ? `<label class="chk inline" style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:-12px"><input type="checkbox" id="hsel-all" ${histSel.size === list.length ? 'checked' : ''}>Select all</label>` : ''}
   <div>${list.length ? list.map((h) => `<div class="hist-item"><input type="checkbox" data-hsel="${h.id}" ${histSel.has(String(h.id)) ? 'checked' : ''} aria-label="Select ${esc(h.title)}" style="margin-top:3px;flex:none;width:16px;height:16px;accent-color:var(--pri)">
     <div style="flex:1;min-width:0"><div class="t">${esc(h.title)}</div><div class="hint">${esc(h.status)} · ${new Date(h.at).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}</div></div>
-    <button type="button" class="btn b-ghost b-sm" data-action="history-copy" data-id="${h.id}" aria-label="Copy title">${icon.copy}</button>
-    <button type="button" class="btn b-sec b-sm" data-action="history-open" data-id="${h.id}">Open</button></div>`).join('')
+    <button type="button" class="btn btn-ghost btn-sm" data-action="history-copy" data-id="${h.id}" aria-label="Copy title">${icon.copy}</button>
+    <button type="button" class="btn btn-secondary btn-sm" data-action="history-open" data-id="${h.id}">Open</button></div>`).join('')
     : '<p class="hint">Reports you fill, copy or export appear here, with their screenshots.</p>'}</div>`;
   dock.innerHTML = list.length ? histDock() : '';
   after();
 }
-const histDock = () => `<button type="button" class="btn b-pri wide" data-action="history-export" id="hist-export" ${histSel.size ? '' : 'aria-disabled="true"'}>${icon.download}${histSel.size ? `Export ${histSel.size} report${histSel.size === 1 ? '' : 's'} to Word` : 'Tick reports to export to Word'}</button>
+const histDock = () => `<button type="button" class="btn btn-primary btn-block" data-action="history-export" id="hist-export" ${histSel.size ? '' : 'aria-disabled="true"'}>${icon.download}${histSel.size ? `Export ${histSel.size} report${histSel.size === 1 ? '' : 's'} to Word` : 'Tick reports to export to Word'}</button>
   <div class="hint" style="text-align:center">One Word file, one report per page. Screenshots are included; videos come in the same zip.</div>`;
 async function exportHistory() {
   const list = (await history()).filter((h) => histSel.has(String(h.id)));
@@ -1188,8 +1206,9 @@ document.addEventListener('change', (e) => {
   const t = e.target;
   if (t.id === 'projsel') { switchProject(t.value).catch((err) => toast(err.message, 3000)); return; }
   if (t.dataset.field) {
-    st.report.fields[t.dataset.field] = t.value; st.report.aiChosen[t.dataset.field] = false; saveDraft();
-    const tag = document.querySelector(`label[for="fld-${t.dataset.field}"] .ai-tag`); if (tag) tag.remove();
+    st.report.fields[t.dataset.field] = t.value; st.report.aiChosen[t.dataset.field] = false;
+    (st.report.touched = st.report.touched || {})[t.dataset.field] = !!t.value; saveDraft();
+    setProv(t.dataset.field);
   }
   if (t.id === 'file') { addFiles(t.files); t.value = ''; }
   if (t.dataset.bsel !== undefined || t.id === 'bsel-all') {

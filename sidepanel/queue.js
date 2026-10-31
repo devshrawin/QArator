@@ -23,4 +23,4 @@ export const removeBugs = (ids) => updateBugs((list) => list.filter((b) => !ids.
 export const addBug = (bug) => updateBugs((list) => [...list, bug]);
 
 export const bugNote = (b) => String(b.snap.note || '').split('\n')[0].trim() || 'Untitled bug';
-export const STATUS = { waiting: 'Waiting to be written', writing: 'Writing…', ready: 'Ready', failed: 'Not written', filled: 'Filled in Zoho' };
+export const STATUS = { waiting: 'Waiting to be written', writing: 'Writing…', ready: 'Draft', failed: 'Not written', filled: 'Filled in Zoho' };

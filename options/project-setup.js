@@ -34,8 +34,8 @@ const steps = () => ROUTE_STEPS[W.route] || ['start'];
 const cur = () => steps()[W.step] || 'start';
 
 const nav = (next = 'Next', { back = true, nextGo = 'next', disabled = false } = {}) => `<div class="foot">
-  ${back ? `<button type="button" class="btn b-ghost" data-go="back">${icon.back}Back</button>` : ''}<span class="grow"></span>
-  <button type="button" class="btn b-pri" data-go="${nextGo}" id="next" ${disabled ? 'aria-disabled="true"' : ''}>${next}</button></div>`;
+  ${back ? `<button type="button" class="btn btn-ghost" data-go="back">${icon.back}Back</button>` : ''}<span class="grow"></span>
+  <button type="button" class="btn btn-primary" data-go="${nextGo}" id="next" ${disabled ? 'aria-disabled="true"' : ''}>${next}</button></div>`;
 const card = (inner) => `<div class="card">${inner}</div>`;
 
 // ---------- screens ----------
@@ -48,13 +48,13 @@ function start() {
       ${r('agent', 'Let an AI agent write it', 'Works for Zoho, Jira, Confluence or anything else. You download a guide, give it to the agent with a description of your bug form, and import what it writes.', 'Easiest for a new tool')}
       ${r('hand', 'I will answer a few questions', 'Name, title, sections, dropdowns and tags, one screen at a time. About five minutes.')}
     </div>
-    <div class="foot"><span class="grow"></span><a class="btn b-ghost" href="options.html#projects">Back to settings</a></div>`);
+    <div class="foot"><span class="grow"></span><a class="btn btn-ghost" href="options.html#projects">Back to settings</a></div>`);
 }
 
 function importStep() {
   return card(`<h1>Import a project file</h1>
     <p>Choose the <span class="kbd">.json</span> file, or paste its text. Nothing is changed until the check passes, and the file never touches your AI key.</p>
-    <div class="row"><button type="button" class="btn b-sec" data-go="pick">${icon.upload}Choose a file</button></div>
+    <div class="row"><button type="button" class="btn btn-secondary" data-go="pick">${icon.upload}Choose a file</button></div>
     <div><label class="lbl" for="json">Or paste the text</label>${beam(`<textarea id="json" class="field mono" rows="8" placeholder='{ "qarator": "format", ... }'>${esc(W.json)}</textarea>`)}</div>
     ${notes()}
     ${nav('Check and import', { nextGo: 'doimport' })}`);
@@ -65,15 +65,15 @@ function agentStep() {
   return card(`<h1>Let an AI agent write it</h1>
     <ol class="steps">
       <li><div class="s-t">Download the guide</div><div class="s-d">It tells the agent exactly what a project file is and which questions to ask you.</div>
-        <button type="button" class="btn b-sec b-sm" data-go="guide">${icon.download}Download setup guide (.md)</button></li>
+        <button type="button" class="btn btn-secondary btn-sm" data-go="guide">${icon.download}Download setup guide (.md)</button></li>
       <li><div class="s-t">Give the agent the guide and your notes</div>
         <div class="s-d">Use any AI chat that can read files (Claude, ChatGPT, Gemini). Attach the guide, and add what describes your tracker:</div>
         <ul class="s-l"><li>a screenshot or description of your <strong>new bug form</strong>, with every dropdown's choices</li><li>one <strong>real finished bug report</strong> from your team</li><li>your <strong>tag list</strong>, if you have one</li><li>which <strong>sites or portals</strong> differ</li></ul>
         <div class="s-d">Then send it this message:</div>
-        <div class="promptbox"><span id="prompt">${esc(PROMPT)}</span><button type="button" class="btn b-sec b-sm" data-go="copyprompt">${icon.copy}Copy message</button></div></li>
+        <div class="promptbox"><span id="prompt">${esc(PROMPT)}</span><button type="button" class="btn btn-secondary btn-sm" data-go="copyprompt">${icon.copy}Copy message</button></div></li>
       <li><div class="s-t">Paste its answer here</div>
         <div class="s-d">Copy the JSON block it writes, or save it as a file. QArator checks it and tells you in plain words if anything is wrong; send that list back to the agent and ask it to fix exactly that.</div>
-        <div class="row"><button type="button" class="btn b-sec b-sm" data-go="pick">${icon.upload}Choose a file</button></div>
+        <div class="row"><button type="button" class="btn btn-secondary btn-sm" data-go="pick">${icon.upload}Choose a file</button></div>
         ${beam(`<textarea id="json" class="field mono" rows="7" placeholder='{ "qarator": "format", ... }'>${esc(W.json)}</textarea>`)}</li>
     </ol>
     ${notes()}
@@ -104,8 +104,8 @@ function titleStep() {
   const rows = [...W.segments, ...all.filter((k) => !W.segments.includes(k))].map((k) => {
     const on = W.segments.includes(k), i = W.segments.indexOf(k);
     return `<div class="segrow"><label class="chk inline"><input type="checkbox" data-seg="${k}" ${on ? 'checked' : ''}><span>${SEGMENTS[k]}</span></label>
-      <button type="button" class="ib" data-go="segup" data-id="${k}" aria-label="Move ${SEGMENTS[k]} up" ${!on || i === 0 ? 'disabled' : ''}>${icon.up}</button>
-      <button type="button" class="ib" data-go="segdown" data-id="${k}" aria-label="Move ${SEGMENTS[k]} down" ${!on || i === W.segments.length - 1 ? 'disabled' : ''}>${icon.down}</button></div>`;
+      <button type="button" class="btn btn-icon" data-go="segup" data-id="${k}" aria-label="Move ${SEGMENTS[k]} up" ${!on || i === 0 ? 'disabled' : ''}>${icon.up}</button>
+      <button type="button" class="btn btn-icon" data-go="segdown" data-id="${k}" aria-label="Move ${SEGMENTS[k]} down" ${!on || i === W.segments.length - 1 ? 'disabled' : ''}>${icon.down}</button></div>`;
   }).join('');
   return card(`<h1>How a bug title looks</h1>
     <p>A title is built from parts. Tick the ones you use and put them in order. Portal, Module and Page are read from the site you test, so you can leave them in.</p>
@@ -123,7 +123,7 @@ function sectionsStep() {
     <p>Tick the sections your reports have. The note under each one tells the AI what belongs there; edit it to match your team's habits.</p>
     ${W.sections.map((s, i) => `<div class="secbox"><label class="chk inline"><input type="checkbox" data-sec="${i}" ${s.include ? 'checked' : ''}><span><strong>${esc(s.name)}</strong></span></label>
       ${beam(`<input class="field" data-secguide="${i}" aria-label="What goes in ${esc(s.name)}" value="${esc(s.guide)}">`)}</div>`).join('')}
-    <div class="row"><div style="flex:1;min-width:180px">${beam('<input id="newsec" class="field" placeholder="Another section, e.g. Workaround">')}</div><button type="button" class="btn b-sec" data-go="addsec">${icon.plus}Add</button></div>
+    <div class="row"><div style="flex:1;min-width:180px">${beam('<input id="newsec" class="field" placeholder="Another section, e.g. Workaround">')}</div><button type="button" class="btn btn-secondary" data-go="addsec">${icon.plus}Add</button></div>
     ${nav('Next')}`);
 }
 
@@ -133,7 +133,7 @@ function fieldsStep() {
     ${W.fields.map((f, i) => `<div class="secbox"><div class="row"><label class="chk inline"><input type="checkbox" data-fon="${i}" ${f.on ? 'checked' : ''}><span><strong>${esc(f.name)}</strong></span></label><span class="grow"></span>
       <label class="chk inline hint"><input type="checkbox" data-fai="${i}" ${f.ai ? 'checked' : ''}><span>AI picks it</span></label></div>
       ${beam(`<input class="field" data-fopt="${i}" aria-label="Choices for ${esc(f.name)}" value="${esc(f.options)}" placeholder="Choice 1, Choice 2">`)}</div>`).join('')}
-    <div class="row"><div style="flex:1;min-width:180px">${beam('<input id="newfield" class="field" placeholder="Another field, e.g. Browser">')}</div><button type="button" class="btn b-sec" data-go="addfield">${icon.plus}Add</button></div>
+    <div class="row"><div style="flex:1;min-width:180px">${beam('<input id="newfield" class="field" placeholder="Another field, e.g. Browser">')}</div><button type="button" class="btn btn-secondary" data-go="addfield">${icon.plus}Add</button></div>
     ${nav('Next')}`);
 }
 
@@ -188,7 +188,7 @@ function finished() {
     <p>${d.warnings.length ? `It was created, with ${d.warnings.length} thing${d.warnings.length === 1 ? '' : 's'} repaired along the way:` : 'It is now the project in use.'}</p>
     ${d.warnings.length ? `<ul class="s-l">${d.warnings.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}
     <ul class="s-l"><li>Open the QArator panel on the site you test, capture a screenshot and press Generate.</li><li>If a sentence in a report sounds off, tune the matching section note in Settings › Format of this project › Description sections.</li><li>Share this project with a teammate: Settings › Projects › Export this project.</li></ul>
-    <div class="foot"><a class="btn b-sec" href="options.html#projects">Open settings</a><span class="grow"></span><button type="button" class="btn b-pri" data-go="close">Close this tab</button></div>`);
+    <div class="foot"><a class="btn btn-secondary" href="options.html#projects">Open settings</a><span class="grow"></span><button type="button" class="btn btn-primary" data-go="close">Close this tab</button></div>`);
 }
 
 const SCREENS = { start, import: importStep, agent: agentStep, name: nameStep, title: titleStep, sections: sectionsStep, fields: fieldsStep, tags: tagsStep, style: styleStep, review: reviewStep };

@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+- **New look across the side panel, Settings, setup, the project wizard and the AI Studio helper card**, from the redesign: one orange accent, warmer greys, light and dark that follow the same tokens, a 3-step bar with a line between the steps, banners for notices, cards for sections and a clearer Draft badge in the review footer.
+- **Fields show who set them**: each dropdown says *AI* (orange tint), *You* (after you change it), *Default* or *Empty* (dashed). Picking Leave empty marks it Empty.
+- **Plainer wording**: Save and capture next, Export to Word, Fill in Zoho, Draft instead of Ready, Zoho does not take tags from forms, Filled in Zoho with a note that QArator never submits.
+- Under the hood: shared design tokens (`lib/tokens.css`) and components (`lib/components.css`); the old button and icon class names are replaced by the new ones.
 ## 1.4.0 · 2026-10-29
 - **Guided project setup** (Settings › Projects, the Format group, and the setup page): pick one of three ways in. Import a file or pasted text (a code fence from a chat is fine); let an AI agent write it (download the guide, a checklist of what to give the agent, a ready message to copy, then paste the reply); or answer a few questions: name and sites, title parts and order with a live example, description sections, dropdowns and their choices, tags, a style example, then review and create. Errors are listed in plain words with what to send back to the agent.
 - Fixed: the *Format of this project* heading in Settings showed a broken symbol; it now has a proper arrow. The title example in Settings no longer uses client names.

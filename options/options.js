@@ -21,7 +21,7 @@ function save() {
   $('#saved').textContent = 'Saving…';
   t = setTimeout(async () => {
     await saveSettings(S);
-    $('#saved').textContent = `Changes save automatically · saved ${fmtTime(Date.now())}`;
+    $('#saved').textContent = `All changes saved · ${fmtTime(Date.now())}`;
   }, 350);
 }
 
@@ -46,16 +46,16 @@ function secAI() {
       <select id="prov" class="field" data-path="ai.provider" data-rerender="1">${Object.entries(PROVIDERS).map(([k, v]) => `<option value="${k}" ${k === p ? 'selected' : ''}>${esc(v.label)}</option>`).join('')}</select></div>
     <div><label class="lbl" for="key">API key</label>
       <div style="display:flex;gap:6px"><div style="flex:1;min-width:0">${B(`<input id="key" class="field mono" type="${keyShown ? 'text' : 'password'}" data-path="ai.apiKey" value="${esc(S.ai.apiKey)}" autocomplete="off" spellcheck="false" placeholder="${esc(PROVIDERS[p].keyHint)}">`)}</div>
-      <button type="button" class="btn b-sec" data-act="show-key" style="flex:none" aria-pressed="${keyShown}">${keyShown ? 'Hide' : 'Show'}</button></div></div>
+      <button type="button" class="btn btn-secondary" data-act="show-key" style="flex:none" aria-pressed="${keyShown}">${keyShown ? 'Hide' : 'Show'}</button></div></div>
     ${p !== 'compatible' ? `<div style="grid-column:1/-1"><label class="lbl" for="key2">Backup key <span style="font-weight:400;color:var(--ink3)">optional</span></label>
       <div style="max-width:480px">${B(`<input id="key2" class="field mono" type="${keyShown ? 'text' : 'password'}" data-path="ai.apiKey2" value="${esc(S.ai.apiKey2 || '')}" autocomplete="off" spellcheck="false" placeholder="Used when the main key runs out or is rejected">`)}</div>
       <div class="hint" style="margin-top:4px">${p === 'gemini' ? 'Google counts free quota per Google Cloud project, not per key: create the backup key in a different project or Google account, or it runs out at the same time.' : 'Used when the main key is rate-limited or rejected.'}</div></div>` : ''}
     ${PROVIDERS[p].needsBase ? `<div class="span2" style="grid-column:1/-1"><label class="lbl" for="base">Endpoint base address</label>${B(`<input id="base" class="field mono" data-path="ai.baseUrl" value="${esc(S.ai.baseUrl)}" placeholder="https://your-server/v1">`)}
       <div class="hint" style="margin-top:4px">QArator calls /models and /chat/completions under this address.</div></div>` : ''}
   </div>
-  ${p === 'gemini' && !String(S.ai.apiKey || '').trim() ? `<div class="getkey"><div class="gk-t">No key yet? It is free and takes a minute.</div><div class="row"><button type="button" class="btn b-pri" data-act="get-key">Get my free key ${icon.external}</button><span class="hint">Opens Google AI Studio. QArator shows a card there with a button that sends the key back here. If Google blocks your work account, use a personal Gmail.</span></div></div>` : ''}
+  ${p === 'gemini' && !String(S.ai.apiKey || '').trim() ? `<div class="getkey"><div class="gk-t">No key yet? It is free and takes a minute.</div><div class="row"><button type="button" class="btn btn-primary" data-act="get-key">Get my free key ${icon.external}</button><span class="hint">Opens Google AI Studio. QArator shows a card there with a button that sends the key back here. If Google blocks your work account, use a personal Gmail.</span></div></div>` : ''}
   <div class="row">
-    <button type="button" class="btn b-sec" data-act="check" ${st === 'busy' ? 'aria-disabled="true"' : ''}>${st === 'busy' ? orb('connecting', 20) + 'Checking…' : icon.refresh + 'Check key and load models'}</button>
+    <button type="button" class="btn btn-secondary" data-act="check" ${st === 'busy' ? 'aria-disabled="true"' : ''}>${st === 'busy' ? orb('connecting', 20) + 'Checking…' : icon.refresh + 'Check key and load models'}</button>
     <span role="status" aria-live="polite">${st && st !== 'busy' ? (st.ok ? `<span class="status">${icon.check}Key works. ${st.count} model${st.count === 1 ? '' : 's'} loaded.</span>` : `<span class="status bad">${icon.alert}${esc(st.msg)}</span>`) : ''}</span>
   </div>
   ${modelPicker()}
@@ -110,7 +110,7 @@ function secUsage() {
   const reqs = rows.reduce((a, r) => a + r.req, 0);
   return `<section class="sec" id="usage">
   <div><div><h2>Usage</h2><p class="desc">Every request QArator sends to your AI provider, counted in this browser. Providers do not report free quota left, so limits are learned from their rate-limit replies.</p></div></div>
-  <div class="row" role="group" aria-label="Range">${[1, 7, 30].map((d) => `<button type="button" class="btn ${usageDays === d ? 'b-pri' : 'b-sec'} b-sm" data-act="usage-days" data-i="${d}" aria-pressed="${usageDays === d}">${d === 1 ? 'Today' : `${d} days`}</button>`).join('')}</div>
+  <div class="row" role="group" aria-label="Range">${[1, 7, 30].map((d) => `<button type="button" class="btn ${usageDays === d ? 'btn-primary' : 'btn-secondary'} btn-sm" data-act="usage-days" data-i="${d}" aria-pressed="${usageDays === d}">${d === 1 ? 'Today' : `${d} days`}</button>`).join('')}</div>
   <div class="tbl-wrap"><table class="tbl" id="usage-table" style="min-width:720px"><thead><tr><th scope="col">Model</th><th scope="col">Used for</th><th scope="col" class="num">Requests</th><th scope="col" class="num">Failed</th><th scope="col" class="num">Tokens in / out</th><th scope="col" class="num">Cost if paid</th><th scope="col" style="width:150px">${usageDays === 1 ? 'Left today' : ''}</th></tr></thead>
   <tbody>${body || '<tr><td colspan="7" class="hint">Nothing yet. Counts start with your next report.</td></tr>'}</tbody></table></div>
   <div class="row" id="usage-totals" style="gap:6px 18px"><strong>Total ${RANGE[usageDays]}</strong><span>${reqs} request${reqs === 1 ? '' : 's'}</span>
@@ -124,7 +124,7 @@ function secUsage() {
         <div class="hint" style="margin-top:4px">One model per line: model=input,output. Others use rough list prices.</div></div>
       <div><label class="lbl" for="urate">Rupees per US dollar</label>${B(`<input id="urate" class="field" type="number" min="1" data-type="number" data-path="usage.usdInr" value="${esc(rate)}">`)}</div>
     </div></details>
-  <div><button type="button" class="btn b-ghost" data-act="usage-reset" style="margin-left:-8px">Reset counters</button></div>
+  <div><button type="button" class="btn btn-ghost" data-act="usage-reset" style="margin-left:-8px">Reset counters</button></div>
   </section>`;
 }
 
@@ -139,23 +139,23 @@ function secProjects() {
     <span class="pdot" aria-hidden="true">${p.active ? icon.check : ''}</span>
     ${B(`<input class="field" data-pj-name="${esc(p.id)}" aria-label="Project name" value="${esc(p.name)}">`)}
     <span class="hint pmeta">${p.scopes ? `${p.scopes} portal${p.scopes === 1 ? '' : 's'}` : ''}</span>
-    ${p.active ? '<span class="hint">In use</span>' : `<button type="button" class="btn b-sec b-sm" data-act="pj-use" data-id="${esc(p.id)}">Use</button>`}
-    <button type="button" class="ib" data-act="pj-del" data-id="${esc(p.id)}" aria-label="Delete ${esc(p.name)}" ${P.length < 2 ? 'disabled' : ''}>${icon.x}</button></div>`).join('');
+    ${p.active ? '<span class="hint">In use</span>' : `<button type="button" class="btn btn-secondary btn-sm" data-act="pj-use" data-id="${esc(p.id)}">Use</button>`}
+    <button type="button" class="btn btn-icon" data-act="pj-del" data-id="${esc(p.id)}" aria-label="Delete ${esc(p.name)}" ${P.length < 2 ? 'disabled' : ''}>${icon.x}</button></div>`).join('');
   const notes = importNotes ? `<div class="notes" role="status"><strong>${esc(importNotes.title)}</strong>${importNotes.items.length ? `<ul>${importNotes.items.map((x) => `<li>${esc(x)}</li>`).join('')}</ul><div class="hint">Anything listed was repaired on import. Fix it in the sections below, or send this list back to your AI agent.</div>` : ''}</div>` : '';
   return `<section class="sec" id="projects">
   <div><h2>Projects</h2><p class="desc">A project is a saved setup: title format, sections, fields, tags and portals. Keep one per team or product, and switch in the panel. Your AI key and look stay yours.</p></div>
   <div>${rows}</div>
   ${notes}
   <div class="row">
-    <a class="btn b-pri" href="project-setup.html">Guided project setup</a>
-    <button type="button" class="btn b-sec" data-act="import">${icon.upload}Import a project file</button>
-    <button type="button" class="btn b-sec" data-act="pj-new">${icon.plus}New blank project</button>
-    <button type="button" class="btn b-sec" data-act="export">${icon.download}Export this project</button>
-    <button type="button" class="btn b-ghost" data-act="reset">Reset this project to the neutral setup</button>
+    <a class="btn btn-primary" href="project-setup.html">Set up a new project</a>
+    <button type="button" class="btn btn-secondary" data-act="import">${icon.upload}Import a project file</button>
+    <button type="button" class="btn btn-secondary" data-act="pj-new">${icon.plus}New blank project</button>
+    <button type="button" class="btn btn-secondary" data-act="export">${icon.download}Export this project</button>
+    <button type="button" class="btn btn-ghost" data-act="reset">Reset this project to the neutral setup</button>
   </div>
   <div class="guide-box"><strong>Setting up a new platform (Jira, Confluence, Zoho, anything)?</strong>
     <p class="desc" style="margin:4px 0 8px">Download the setup guide, give it to any AI agent together with a screenshot or description of your bug form and a sample report, and import the file it writes.</p>
-    <button type="button" class="btn b-sec" data-act="guide">${icon.download}Download setup guide (.md)</button></div>
+    <button type="button" class="btn btn-secondary" data-act="guide">${icon.download}Download setup guide (.md)</button></div>
   </section>`;
 }
 
@@ -179,8 +179,8 @@ function secTitle() {
   return `<section class="sec" id="title">
   <div><h2>Title format</h2><p class="desc">Titles are built from these segments in this order. Use the arrows to reorder.</p></div>
   <div class="row" role="list" aria-label="Title segments">${segs.map((k, i) => `<span class="tok" role="listitem">${SEGMENTS[k]}
-    <button type="button" class="ib" style="width:24px;height:24px" data-act="seg-left" data-i="${i}" aria-label="Move ${SEGMENTS[k]} earlier" ${i === 0 ? 'disabled' : ''}>${icon.left}</button>
-    <button type="button" class="ib" style="width:24px;height:24px" data-act="seg-right" data-i="${i}" aria-label="Move ${SEGMENTS[k]} later" ${i === segs.length - 1 ? 'disabled' : ''}>${icon.right}</button></span>`).join('')}</div>
+    <button type="button" class="btn btn-icon" style="width:24px;height:24px" data-act="seg-left" data-i="${i}" aria-label="Move ${SEGMENTS[k]} earlier" ${i === 0 ? 'disabled' : ''}>${icon.left}</button>
+    <button type="button" class="btn btn-icon" style="width:24px;height:24px" data-act="seg-right" data-i="${i}" aria-label="Move ${SEGMENTS[k]} later" ${i === segs.length - 1 ? 'disabled' : ''}>${icon.right}</button></span>`).join('')}</div>
   <div class="g4">
     <div><label class="lbl" for="tproj">Project</label>${B(`<input id="tproj" class="field" data-path="title.project" data-live="example" value="${esc(S.title.project)}">`)}</div>
     <div><label class="lbl" for="tsep">Separator</label>${B(`<input id="tsep" class="field mono" data-path="title.separator" data-live="example" value="${esc(S.title.separator)}">`)}</div>
@@ -196,9 +196,9 @@ function secTitle() {
     <td>${B(`<input class="field" aria-label="Portal, rule ${i + 1}" data-path="urlRules.${i}.portal" value="${esc(r.portal)}" placeholder="—">`)}</td>
     <td>${B(`<input class="field" aria-label="Module, rule ${i + 1}" data-path="urlRules.${i}.module" value="${esc(r.module)}" placeholder="—">`)}</td>
     <td>${B(`<input class="field" aria-label="Page, rule ${i + 1}" data-path="urlRules.${i}.page" value="${esc(r.page)}" placeholder="—">`)}</td>
-    <td style="white-space:nowrap"><button type="button" class="ib" data-act="rule-up" data-i="${i}" aria-label="Move rule ${i + 1} up" ${i === 0 ? 'disabled' : ''}>${icon.up}</button><button type="button" class="ib" data-act="rule-del" data-i="${i}" aria-label="Delete rule ${i + 1}">${icon.x}</button></td></tr>`).join('')}
+    <td style="white-space:nowrap"><button type="button" class="btn btn-icon" data-act="rule-up" data-i="${i}" aria-label="Move rule ${i + 1} up" ${i === 0 ? 'disabled' : ''}>${icon.up}</button><button type="button" class="btn btn-icon" data-act="rule-del" data-i="${i}" aria-label="Delete rule ${i + 1}">${icon.x}</button></td></tr>`).join('')}
   </tbody></table></div>
-  <button type="button" class="btn b-ghost" data-act="rule-add" style="margin:8px 0 0 -8px">${icon.plus}Add rule</button></div>
+  <button type="button" class="btn btn-ghost" data-act="rule-add" style="margin:8px 0 0 -8px">${icon.plus}Add rule</button></div>
   </section>`;
 }
 
@@ -206,14 +206,14 @@ function secSections() {
   return `<section class="sec" id="sections">
   <div><h2>Description sections</h2><p class="desc">The sections the AI writes, in this order. Guidance tells it what belongs in each one.</p></div>
   <div>${S.sections.map((s, i) => `<div class="secrow">
-    <div style="display:flex"><button type="button" class="ib" data-act="sec-up" data-i="${i}" aria-label="Move ${esc(s.name)} up" ${i === 0 ? 'disabled' : ''}>${icon.up}</button><button type="button" class="ib" data-act="sec-down" data-i="${i}" aria-label="Move ${esc(s.name)} down" ${i === S.sections.length - 1 ? 'disabled' : ''}>${icon.down}</button></div>
+    <div style="display:flex"><button type="button" class="btn btn-icon" data-act="sec-up" data-i="${i}" aria-label="Move ${esc(s.name)} up" ${i === 0 ? 'disabled' : ''}>${icon.up}</button><button type="button" class="btn btn-icon" data-act="sec-down" data-i="${i}" aria-label="Move ${esc(s.name)} down" ${i === S.sections.length - 1 ? 'disabled' : ''}>${icon.down}</button></div>
     ${B(`<input class="field" aria-label="Section name" data-path="sections.${i}.name" value="${esc(s.name)}" style="font-weight:600">`)}
     <select class="field" aria-label="Layout for ${esc(s.name)}" data-path="sections.${i}.layout">${Object.entries(LAYOUTS).map(([k, v]) => `<option value="${k}" ${k === s.layout ? 'selected' : ''}>${v}</option>`).join('')}</select>
     <label class="chk inline" style="font-size:12px"><input type="checkbox" data-type="bool" data-path="sections.${i}.include" ${s.include ? 'checked' : ''}>Include</label>
-    <button type="button" class="ib" data-act="sec-del" data-i="${i}" aria-label="Delete ${esc(s.name)}" ${S.sections.length <= 1 ? 'disabled' : ''}>${icon.x}</button>
+    <button type="button" class="btn btn-icon" data-act="sec-del" data-i="${i}" aria-label="Delete ${esc(s.name)}" ${S.sections.length <= 1 ? 'disabled' : ''}>${icon.x}</button>
     <div class="guide">${B(`<input class="field" aria-label="AI guidance for ${esc(s.name)}" data-path="sections.${i}.guide" value="${esc(s.guide)}" style="color:var(--ink2)" placeholder="What the AI should write here">`)}</div>
   </div>`).join('')}</div>
-  <div class="row"><button type="button" class="btn b-ghost" data-act="sec-add" style="margin-left:-8px">${icon.plus}Add section</button>
+  <div class="row"><button type="button" class="btn btn-ghost" data-act="sec-add" style="margin-left:-8px">${icon.plus}Add section</button>
   <span class="hint">A section named “Steps to Reproduce” (id steps) keeps the tester's own steps when they add them.</span></div>
   </section>`;
 }
@@ -228,9 +228,9 @@ function secFields() {
     <td>${B(`<input class="field" aria-label="Options for ${esc(f.name)}, comma separated" data-type="list" data-rerender-blur="1" data-path="fields.${i}.options" value="${esc(f.options.join(', '))}">`)}</td>
     <td><select class="field" aria-label="Default for ${esc(f.name)}" data-path="fields.${i}.default">${f.options.map((o) => `<option ${o === f.default ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select></td>
     <td><label class="chk inline"><input type="checkbox" role="switch" data-type="bool" aria-label="AI chooses ${esc(f.name)}" data-path="fields.${i}.ai" ${f.ai ? 'checked' : ''}><span class="hint">${f.ai ? 'On' : 'Off'}</span></label></td>
-    <td><button type="button" class="ib" data-act="field-del" data-i="${i}" aria-label="Delete ${esc(f.name)}">${icon.x}</button></td></tr>`).join('')}
+    <td><button type="button" class="btn btn-icon" data-act="field-del" data-i="${i}" aria-label="Delete ${esc(f.name)}">${icon.x}</button></td></tr>`).join('')}
   </tbody></table></div>
-  <div class="row"><button type="button" class="btn b-ghost" data-act="field-add" style="margin-left:-8px">${icon.plus}Add field</button>
+  <div class="row"><button type="button" class="btn btn-ghost" data-act="field-add" style="margin-left:-8px">${icon.plus}Add field</button>
   <span class="hint">When AI chooses is off, the default is used and the tester can change it in review. A value of Unassigned is left empty in Zoho.</span></div>
   </section>`;
 }
@@ -238,7 +238,7 @@ function secFields() {
 function secTags() {
   return `<section class="sec" id="tags">
   <div><h2>Tags</h2><p class="desc">The AI suggests tags from this list. Testers tick the ones to add.</p></div>
-  <div class="row">${S.tags.list.map((g, i) => `<span class="tok">${esc(g)}<button type="button" class="ib" style="width:22px;height:22px" data-act="tag-del" data-i="${i}" aria-label="Remove tag ${esc(g)}">${icon.x}</button></span>`).join('') || '<span class="hint">No tags yet.</span>'}</div>
+  <div class="row">${S.tags.list.map((g, i) => `<span class="tok">${esc(g)}<button type="button" class="btn btn-icon" style="width:22px;height:22px" data-act="tag-del" data-i="${i}" aria-label="Remove tag ${esc(g)}">${icon.x}</button></span>`).join('') || '<span class="hint">No tags yet.</span>'}</div>
   <div class="g2" style="grid-template-columns:minmax(0,2fr) minmax(0,1fr);align-items:end">
     <div><label class="lbl" for="newtag">Add a tag</label>${B(`<input id="newtag" class="field" placeholder="Type a tag and press Enter">`)}</div>
     <div><label class="lbl" for="maxtag">Suggest up to</label><select id="maxtag" class="field" data-type="number" data-path="tags.max">${[3, 5, 8, 10].map((n) => `<option value="${n}" ${S.tags.max === n ? 'selected' : ''}>${n} tags</option>`).join('')}</select></div>
@@ -309,12 +309,12 @@ function secScopes() {
       <div><label class="lbl" for="sc-t${i}">Tags for this portal <span class="hint">one per line, blank = the project's tags</span></label>${B(`<textarea id="sc-t${i}" class="field" rows="3" data-sc="${i}" data-k="tags">${esc((x.override?.tags?.list || []).join('\n'))}</textarea>`)}</div>
     </div>
     <div class="row"><span class="hint">${esc(['sections', 'fields', 'urlRules', 'styleExample'].filter((k) => x.override?.[k] != null && (!Array.isArray(x.override[k]) || x.override[k].length)).map((k) => ({ sections: 'its own sections', fields: 'field changes', urlRules: 'its own page names', styleExample: 'its own style example' })[k]).join(', ') || 'No other overrides')}</span><span class="grow"></span>
-      <button type="button" class="btn b-ghost b-sm" data-act="sc-del" data-i="${i}">${icon.x}Remove portal</button></div></div>`).join('');
+      <button type="button" class="btn btn-ghost btn-sm" data-act="sc-del" data-i="${i}">${icon.x}Remove portal</button></div></div>`).join('');
   return `<section class="sec" id="scopes">
   <div><h2>Where this project applies</h2><p class="desc">The sites this project is for, and the portals or areas within them that differ. When a page matches a portal, its settings go on top of the project's. The longer match wins.</p></div>
   <div><label class="lbl" for="sites">Sites <span class="hint">one per line; QArator switches to this project on these sites</span></label>${B(`<textarea id="sites" class="field mono" rows="3" data-sites="1" placeholder="app.example.com">${esc((S.meta.sites || []).join('\n'))}</textarea>`)}</div>
   ${sc || '<div class="hint">No portals. Add one when part of the site needs its own tags, title code or page names.</div>'}
-  <div class="row"><button type="button" class="btn b-ghost" data-act="sc-add" style="margin-left:-8px">${icon.plus}Add portal or area</button>
+  <div class="row"><button type="button" class="btn btn-ghost" data-act="sc-add" style="margin-left:-8px">${icon.plus}Add portal or area</button>
     <span class="hint">Sections, field changes and page names per portal come from the project file.</span></div>
   </section>`;
 }
@@ -324,7 +324,7 @@ function render() {
   const a = document.activeElement;
   const keep = a && a.id && main.contains(a) ? { id: a.id, s: a.selectionStart, e: a.selectionEnd } : null;
   main.innerHTML = secAI() + secProjects() + secLength() + secUsage() + secAppearance()
-    + `<details class="adv" id="advanced"${advOpen ? ' open' : ''}><summary><span class="adv-t"><span class="adv-c" aria-hidden="true">${icon.chevron}</span>Format of this project</span><span class="adv-d">Where it applies, portals, title format, sections, fields, tags and Zoho labels. Everything a project file sets can be changed here.</span></summary><div class="adv-go"><a class="btn b-sec b-sm" href="project-setup.html" style="margin:0 0 14px">Guided project setup</a> <span class="hint">New to this? Answer a few questions, or let an AI agent write the file.</span></div>`
+    + `<details class="adv" id="advanced"${advOpen ? ' open' : ''}><summary><span class="adv-t"><span class="adv-c" aria-hidden="true">${icon.chevron}</span>Format of this project</span><span class="adv-d">Where it applies, portals, title format, sections, fields, tags and Zoho labels. Everything a project file sets can be changed here.</span></summary><div class="adv-go"><a class="btn btn-secondary btn-sm" href="project-setup.html" style="margin:0 0 14px">Set up a new project</a> <span class="hint">New to this? Answer a few questions, or let an AI agent write the file.</span></div>`
     + secScopes() + secTitle() + secSections() + secFields() + secTags() + secStyle() + secZoho() + '</details>';
   applyTheme();
   scrollTo(0, y);

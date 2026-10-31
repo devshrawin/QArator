@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>QArator</title>
 <link rel="stylesheet" href="../lib/tokens.css">
+<link rel="stylesheet" href="../lib/components.css">
 <link rel="stylesheet" href="../lib/border-beam.css">
 <link rel="stylesheet" href="../lib/appearance.css">
 <link rel="stylesheet" href="sidepanel.css">
@@ -12,16 +13,16 @@
 <script src="../lib/thinking-orbs.js"></script>
 <script type="module" src="sidepanel.js"></script>
 </head>
-<body>
+<body class="qa">
 <div id="app">
   <header class="hdr">
     <span id="mark"></span>
     <span class="wm">QArator</span>
     <span class="proj" id="proj"></span>
     <span class="grow"></span>
-    <button type="button" class="ib" id="btn-bugs" data-action="bugs" aria-label="Bug list" title="Bug list" style="position:relative"></button>
-    <button type="button" class="ib" id="btn-history" data-action="history" aria-label="Recent reports" title="Recent reports"></button>
-    <button type="button" class="ib" id="btn-settings" data-action="settings" aria-label="Settings" title="Settings (Ctrl+,)"></button>
+    <button type="button" class="btn btn-icon" id="btn-bugs" data-action="bugs" aria-label="Bug list" title="Bug list" style="position:relative"></button>
+    <button type="button" class="btn btn-icon" id="btn-history" data-action="history" aria-label="Recent reports" title="Recent reports"></button>
+    <button type="button" class="btn btn-icon" id="btn-settings" data-action="settings" aria-label="Settings" title="Settings (Ctrl+,)"></button>
   </header>
   <nav id="flow" class="flow" aria-label="Steps"></nav>
   <div id="recbar"></div>

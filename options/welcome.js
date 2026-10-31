@@ -29,10 +29,10 @@ function dots() {
 }
 
 const nav = (next = 'Next', { back = true, skip = '' } = {}) => `<div class="foot">
-  ${back && step > 0 ? `<button type="button" class="btn b-ghost" data-go="back">${icon.back}Back</button>` : ''}
+  ${back && step > 0 ? `<button type="button" class="btn btn-ghost" data-go="back">${icon.back}Back</button>` : ''}
   <span class="grow"></span>
-  ${skip ? `<button type="button" class="btn b-ghost" data-go="next">${skip}</button>` : ''}
-  <button type="button" class="btn b-pri" data-go="${step === STEPS.length - 1 ? 'done' : 'next'}" id="next">${next}</button></div>`;
+  ${skip ? `<button type="button" class="btn btn-ghost" data-go="next">${skip}</button>` : ''}
+  <button type="button" class="btn btn-primary" data-go="${step === STEPS.length - 1 ? 'done' : 'next'}" id="next">${next}</button></div>`;
 
 function keyStep() {
   const p = S.ai.provider, link = KEY_LINKS[p];
@@ -48,7 +48,7 @@ function keyStep() {
         <li>Click <strong>Create API key</strong>. If it asks, choose <strong>Create API key in new project</strong>.</li>
         <li>QArator shows a small card on that page. When your key appears, press <strong>Use this key in QArator</strong>. You come straight back here.</li>
       </ol>
-      <div class="row"><button type="button" class="btn b-pri" data-go="getkey">Get my free key ${icon.external}</button>
+      <div class="row"><button type="button" class="btn btn-primary" data-go="getkey">Get my free key ${icon.external}</button>
         <span class="hint">Opens Google AI Studio in a new tab</span></div>
       <p class="gk-n">Google says it isn't available for your work account? Sign in with a personal Gmail instead.</p>
     </div>` : '';
@@ -67,10 +67,10 @@ function keyStep() {
       <div class="hint" style="margin-top:6px">Paste it and QArator checks it for you. Spaces and quotes are removed, and the provider is picked from the key.</div>
     </div>
     ${link && !gemini ? `<a href="${link[0]}" target="_blank" rel="noopener" class="hint" style="color:var(--ink)">${esc(link[1])} ${icon.external}</a>` : ''}
-    <div class="row"><button type="button" class="btn b-sec" data-go="test" ${st === 'busy' ? 'aria-disabled="true"' : ''}>${st === 'busy' ? orb('connecting', 20) + 'Testing…' : 'Test key'}</button>
+    <div class="row"><button type="button" class="btn btn-secondary" data-go="test" ${st === 'busy' ? 'aria-disabled="true"' : ''}>${st === 'busy' ? orb('connecting', 20) + 'Testing…' : 'Test key'}</button>
       <span role="status" aria-live="polite" id="key-status">${st && st !== 'busy' ? `<span class="status ${st.ok ? 'ok' : 'bad'}">${st.ok ? icon.check : icon.alert}${esc(st.text)}</span>` : ''}</span></div>
     ${ok ? '' : '<div class="hint"><strong>No key yet?</strong> Press <em>Do this later</em>. You can still capture bugs and use <strong>Export to Word</strong> without AI, and add the key any time in Settings.</div>'}
-    <div class="hint">Got a project file from your team? <button type="button" class="btn b-ghost b-sm" data-go="import" style="height:auto;padding:0 6px">Import it</button> Using a different bug tracker? <button type="button" class="btn b-ghost b-sm" data-go="guide" style="height:auto;padding:0 6px">Download the setup guide</button> and give it to an AI agent with your form; it writes the file for you.</div>
+    <div class="hint">Got a project file from your team? <button type="button" class="btn btn-ghost btn-sm" data-go="import" style="height:auto;padding:0 6px">Import it</button> Using a different bug tracker? <button type="button" class="btn btn-ghost btn-sm" data-go="guide" style="height:auto;padding:0 6px">Download the setup guide</button> and give it to an AI agent with your form; it writes the file for you.</div>
     ${nav('Next', { skip: ok ? '' : 'Do this later' })}</div>`;
 }
 
@@ -86,7 +86,7 @@ function tryIt() {
       <li>Type what's wrong and press <span class="kbd">Ctrl+Enter</span> to write the report.</li>
       <li>Open Zoho's Submit Issue form, then <span class="kbd">Ctrl+Enter</span> again to fill it.</li>
     </ul>
-    <div class="row"><button type="button" class="btn b-sec" data-go="panel">Open the panel now</button></div>
+    <div class="row"><button type="button" class="btn btn-secondary" data-go="panel">Open the panel now</button></div>
     ${nav('Finish')}</div>`;
 }
 
@@ -144,7 +144,7 @@ document.addEventListener('click', async (e) => {
   if (go === 'done') {
     await chrome.storage.local.set({ onboarded: Date.now() });
     $('#step').innerHTML = `<div class="card"><h1>All set</h1><p>You can change anything later in settings.</p>
-      <div class="foot"><a class="btn b-sec" href="options.html">Open settings</a><span class="grow"></span><button type="button" class="btn b-pri" id="close">Close this tab</button></div></div>`;
+      <div class="foot"><a class="btn btn-secondary" href="options.html">Open settings</a><span class="grow"></span><button type="button" class="btn btn-primary" id="close">Close this tab</button></div></div>`;
     $('#close').onclick = () => window.close();
     return;
   }

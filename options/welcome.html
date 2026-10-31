@@ -5,16 +5,17 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Set up QArator</title>
 <link rel="stylesheet" href="../lib/tokens.css">
+<link rel="stylesheet" href="../lib/components.css">
 <link rel="stylesheet" href="../lib/border-beam.css">
 <link rel="stylesheet" href="../lib/appearance.css">
 <link rel="stylesheet" href="options.css">
 <style>
   .wz { max-width: 620px; margin: 0 auto; padding: 40px 16px 64px; display: flex; flex-direction: column; gap: 22px; }
   .dots { display: flex; gap: 6px; align-items: center; }
-  .dots i { width: 28px; height: 4px; border-radius: 2px; background: var(--chip); }
+  .dots i { width: 28px; height: 4px; border-radius: 2px; background: var(--bg-muted); }
   .dots i.on { background: var(--acc); }
-  .card { border: 1px solid var(--line); border-radius: 10px; padding: 22px; display: flex; flex-direction: column; gap: 16px; background: var(--bg); }
-  .card h1 { font-size: calc(22px * var(--fs)); font-weight: 600; margin: 0; }
+  .card { border: 1px solid var(--line); border-radius: var(--r-lg); padding: 24px; display: flex; flex-direction: column; gap: 16px; background: var(--surface); box-shadow: var(--shadow-1); }
+  .card h1 { font-size: var(--t-3xl); font-weight: var(--fw-semibold); letter-spacing: -.015em; line-height: 1.2; margin: 0; }
   .card p { margin: 0; color: var(--ink2); line-height: 1.5; }
   .card ul { margin: 0; padding-left: 18px; color: var(--ink2); line-height: 1.7; }
   .foot { display: flex; gap: 8px; align-items: center; }
@@ -27,7 +28,7 @@
 <script src="../lib/thinking-orbs.js"></script>
 <script type="module" src="welcome.js"></script>
 </head>
-<body>
+<body class="qa">
 <header class="top">
   <div class="wrap top-in">
     <span id="mark"></span>
