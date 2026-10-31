@@ -10,10 +10,13 @@
 <link rel="stylesheet" href="../lib/appearance.css">
 <link rel="stylesheet" href="options.css">
 <style>
-  .wz { max-width: 620px; margin: 0 auto; padding: 40px 16px 64px; display: flex; flex-direction: column; gap: 22px; }
-  .dots { display: flex; gap: 6px; align-items: center; }
-  .dots i { width: 28px; height: 4px; border-radius: 2px; background: var(--bg-muted); }
-  .dots i.on { background: var(--acc); }
+  .wz { max-width: 620px; transition: none; margin: 0 auto; padding: 40px 16px 64px; display: flex; flex-direction: column; gap: 22px; }
+  .wzgrid { display: block; }
+  .wzgrid.has-steps { display: grid; grid-template-columns: 188px minmax(0, 1fr); gap: 28px; align-items: start; }
+  .vsteps { display: none; }
+  .has-steps .vsteps { display: flex; flex-direction: column; gap: 2px; position: sticky; top: 72px; }
+  .wz:has(.has-steps) { max-width: 860px; }
+  @media (max-width: 760px) { .wzgrid.has-steps { grid-template-columns: minmax(0, 1fr); } .has-steps .vsteps { flex-direction: row; flex-wrap: wrap; position: static; } }
   .card { border: 1px solid var(--line); border-radius: var(--r-lg); padding: 24px; display: flex; flex-direction: column; gap: 16px; background: var(--surface); box-shadow: var(--shadow-1); }
   .card h1 { font-size: var(--t-3xl); font-weight: var(--fw-semibold); letter-spacing: -.015em; line-height: 1.2; margin: 0; }
   .card p { margin: 0; color: var(--ink2); line-height: 1.5; }
@@ -57,8 +60,7 @@
   </div>
 </header>
 <main class="wz">
-  <div class="dots" id="dots" aria-hidden="true"></div>
-  <div id="step"></div>
+  <div class="wzgrid" id="wzgrid"><nav class="vsteps" id="dots" aria-label="Progress"></nav><div id="step"></div></div>
 </main>
 <input type="file" id="import-file" accept="application/json,.json" hidden>
 <input type="file" id="pick-file" accept="application/json,.json" hidden>

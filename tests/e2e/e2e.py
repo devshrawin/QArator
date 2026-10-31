@@ -239,6 +239,15 @@ try:
             where = panel.inner_text("#where") if panel.locator("#where").count() else ""
             check("location: module/page read from breadcrumb", "SEVI Dashboard › State Overview" in where, where)
             shot("01-captured")
+            # reorder: a second screenshot, moved with Alt + arrow, then removed again
+            panel.click("#main [data-action=capture]"); panel.locator(".shots .shot-item").nth(1).wait_for(timeout=8000)
+            order = lambda: panel.evaluate("() => [...document.querySelectorAll('[data-shot]')].map((e) => e.dataset.shot)")
+            o1 = order()
+            panel.focus("[data-shot]"); panel.keyboard.press("Alt+ArrowRight"); panel.wait_for_timeout(300)
+            o2 = order()
+            check("thumbnails: Alt + arrow moves a screenshot", len(o1) == 2 and o2 == o1[::-1], f"{o1} -> {o2}")
+            panel.locator(".shot-actions [data-action=remove]").last.click(); panel.wait_for_timeout(300)
+            check("thumbnails: back to one screenshot", panel.locator(".shots img").count() == 1)
         phase(capture)
 
         def write_gemini():
@@ -803,6 +812,11 @@ try:
         phase(paste_and_file)
         phase(bug_queue)
 
+        def nav(pg, sec):
+            pg.click(f".nav a[href='#{sec}']"); pg.wait_for_timeout(250)
+        def val(pg, sel):
+            return pg.evaluate("(s) => document.querySelector(s).value", sel)
+
         def options_page():
             op = ctx.new_page()
             op.on("pageerror", lambda e: logs.append(f"[options] PAGEERROR: {e}"))
@@ -812,7 +826,7 @@ try:
             op.wait_for_timeout(1500)
             opts = op.locator("#model option").all_inner_texts()
             check("options: Check key loads Gemini models (embedding filtered)", len(opts) == 3 and opts[0] == "Auto (recommended)" and not any("embedding" in o for o in opts), str(opts))
-            op.locator("#usage").scroll_into_view_if_needed()
+            nav(op, "usage")
             ut = op.inner_text("#usage")
             op.locator("#usage").screenshot(path=os.path.join(OUT, "08-usage.png"))
             print("  usage section:\n   " + ut.replace("\n", "\n   ")[:1500])
@@ -820,16 +834,18 @@ try:
             check("usage: tokens and rupee cost shown", "3.6k / 900" in ut and "~\u20b9" in ut, ut[:300])
             op.click("[data-act=usage-days][data-i='7']")
             check("usage: 7-day range", "last 7 days" in op.inner_text("#usage"))
+            nav(op, "ai")
             op.select_option("#prov", "openai")
             op.wait_for_timeout(300)
             op.fill("#key", "sk-test-0000000000000000000000")
             op.wait_for_timeout(2500)
             opts = op.locator("#model option").all_inner_texts()
             check("options: OpenAI models load by themselves, Auto first", opts == ["Auto (recommended)", "gpt-4.1"], str(opts))
-            check("settings: team format starts collapsed", not op.evaluate("document.getElementById('advanced').open"))
-            op.click("#advanced > summary")
+            check("settings: one page at a time, with an icon on every menu item", op.locator(".nav-item svg").count() == 11 and op.locator("main > .sec:not([hidden])").count() == 2, f"{op.locator('.nav-item svg').count()} icons, {op.locator('main > .sec:not([hidden])').count()} pages shown")
+            nav(op, "title")
             op.fill("#tproj", "UR2")
             op.wait_for_timeout(600)
+            nav(op, "projects")
             with op.expect_download() as dl:
                 op.click("[data-act=export]")
             path = dl.value.path()
@@ -840,13 +856,13 @@ try:
             rows0 = op.locator(".prow").count()
             op.set_input_files("#import-file", imp)
             op.wait_for_timeout(800)
-            check("import: applies format, keeps key", op.input_value("#tproj") == "IMPORTED" and op.input_value("#key") == "sk-test-0000000000000000000000")
+            check("import: applies format, keeps key", val(op, "#tproj") == "IMPORTED" and val(op, "#key") == "sk-test-0000000000000000000000")
             check("import: same project id is added as a copy, not over the original", op.locator(".prow").count() == rows0 + 1, f"{rows0} -> {op.locator('.prow').count()}")
             check("import: existing project is still there", "UR" in op.locator(".prow input").first.input_value() or op.locator(".prow input").count() == 2)
             bad = os.path.join(OUT, "bad.json"); open(bad, "w").write("{\"x\":1}")
             op.set_input_files("#import-file", bad)
             op.wait_for_timeout(500)
-            check("import: rejects non-QArator file with a plain reason", op.input_value("#tproj") == "IMPORTED" and "not imported" in op.inner_text("#projects") and "qarator" in op.inner_text("#projects"), op.inner_text("#projects")[:160])
+            check("import: rejects non-QArator file with a plain reason", val(op, "#tproj") == "IMPORTED" and "not imported" in op.inner_text("#projects") and "qarator" in op.inner_text("#projects"), op.inner_text("#projects")[:160])
             op.screenshot(path=os.path.join(OUT, "07-options.png"))
         phase(options_page)
 
@@ -883,7 +899,7 @@ try:
             check("portals: an unmatched address uses the project as it is", r["none"][0] == "" and r["none"][1] == 0, str(r["none"]))
             # the project settings are editable by hand: sites and a portal
             op.reload(); op.wait_for_timeout(800)
-            op.click("#advanced > summary")
+            nav(op, "scopes")
             check("portals: editor lists both portals", op.locator(".scope").count() == 2, str(op.locator(".scope").count()))
             op.fill("#sc-c1", "SHOP")
             op.fill("#sites", "shop.acme.example\nadmin.acme.example\nstaging.acme.example")
@@ -896,6 +912,7 @@ try:
             check("portals: and removed", op.locator(".scope").count() == 2)
             # switching: the panel switches too, and the shelf keeps every project's own edits
             auto = ev("""async () => { const p = await import('/lib/projects.js'); return [await p.projectForUrl('https://staging.acme.example/x'), await p.projectForUrl('https://nowhere.example/')]; }""")
+            nav(op, "projects")
             check("projects: a page on a project's site finds that project", auto[0] == "acme_shop" and auto[1] == "", str(auto))
             op.reload(); op.wait_for_timeout(800)
             ur = [i for i in range(op.locator("[data-act=pj-use]").count())]
@@ -930,9 +947,13 @@ try:
             # the panel header switches projects
             pg = ctx.new_page()
             pg.goto(f"chrome-extension://{EID}/sidepanel/sidepanel.html"); pg.wait_for_timeout(1000)
-            check("panel: project switcher shows with several projects", pg.locator("#projsel").count() == 1 and pg.locator("#projsel option").count() >= 3, str(pg.locator("#projsel option").all_inner_texts()))
-            pg.select_option("#projsel", "acme_shop"); pg.wait_for_timeout(900)
+            check("panel: project switcher shows with several projects", pg.locator("#projsel").count() == 1 and (pg.click("#projsel"), pg.locator("[role=menuitemradio]").count())[1] >= 3, str(pg.locator("[role=menuitemradio]").all_inner_texts()))
+            pg.click("[role=menuitemradio][data-id=acme_shop]"); pg.wait_for_timeout(900)
             check("panel: choosing a project switches it", ev("async () => (await chrome.storage.local.get('settings')).settings.meta.id") == "acme_shop")
+            pg.click("#btn-usage"); pg.wait_for_timeout(300)
+            check("panel: usage popover opens with today's count", "Requests used today" in pg.inner_text("#pop") and "Resets" in pg.inner_text("#pop"), pg.inner_text("#pop")[:120])
+            pg.keyboard.press("Escape"); pg.wait_for_timeout(200)
+            check("panel: Esc closes the popover", pg.locator("#pop .popover").count() == 0)
             pg.close()
             # restore the UR setup for the phases that follow
             sw.evaluate("""async (f) => {
@@ -1005,10 +1026,12 @@ try:
             w.screenshot(path=os.path.join(OUT, "15-wizard-start.png"))
             # by hand
             w.click("[data-id=hand]"); w.wait_for_timeout(300)
+            check("wizard(hand): a step list shows where you are", w.locator(".vstep").count() == 7 and "Name" in w.locator(".vstep[aria-current=step]").inner_text(), w.locator(".vstep").all_inner_texts().__str__())
             check("wizard(hand): name is required before Next", w.get_attribute("#next", "aria-disabled") == "true")
             w.fill("#pname", "Wiz Shop"); w.fill("#pcode", "WIZ"); w.fill("#psites", "wiz.example\nadmin.wiz.example")
             check("wizard(hand): Next opens once named", w.get_attribute("#next", "aria-disabled") == "false")
             w.click("#next"); w.wait_for_timeout(300)
+            check("wizard(hand): finished steps are ticked and can be reopened", w.locator(".vstep.is-done").count() == 1 and w.locator(".vstep[data-go=jump]").count() == 1)
             check("wizard(hand): title step shows a live example", w.inner_text("#ex") == "WIZ | Admin | Orders | Order List | Export Button Does Nothing", w.inner_text("#ex"))
             w.uncheck("[data-seg=module]"); w.wait_for_timeout(200)
             w.fill("#sep", " - "); w.select_option("#scase", "sentence")
@@ -1068,10 +1091,14 @@ try:
             i.close()
             # Settings: the group header is a real heading with an icon, and links to the wizard
             op = ctx.new_page(); op.goto(f"chrome-extension://{EID}/options/options.html"); op.wait_for_timeout(700)
-            check("settings: Format group has an icon, not a font glyph", op.locator("#advanced > summary .adv-c svg").count() == 1)
-            check("settings: guided setup is offered", op.locator("a[href='project-setup.html']").count() >= 2)
-            op.click("#advanced > summary"); op.wait_for_timeout(300)
-            op.locator("#advanced > summary").screenshot(path=os.path.join(OUT, "18-format-group.png"))
+            check("settings: Format pages sit under one group in the menu, each with an icon", op.locator(".nav-sub svg").count() == 7 and op.locator("#fmt-toggle").count() == 1)
+            nav(op, "projects")
+            check("settings: guided setup is offered", op.locator("a[href='project-setup.html']").count() >= 1)
+            op.fill("#nav-q", "theme"); op.wait_for_timeout(300)
+            check("settings: search lists matching settings and opens them", "Theme" in op.inner_text("main") and op.locator("a[data-result='appearance']").count() >= 1, op.inner_text("main")[:120])
+            op.click("a[data-result='appearance']"); op.wait_for_timeout(300)
+            check("settings: opening a search result shows that page", op.locator("#appearance").is_visible() and op.locator("#nav-q").input_value() == "", "")
+            op.locator("#nav").screenshot(path=os.path.join(OUT, "18-format-group.png"))
             op.close()
             sw.evaluate("""async (f) => {
               const { settings = {} } = await chrome.storage.local.get('settings');
@@ -1148,7 +1175,7 @@ try:
             pick("glow", "strong")
             # per person: not exported, kept on import
             op.wait_for_timeout(500)
-            op.click("#advanced > summary")
+            nav(op, "projects")
             with op.expect_download() as dl:
                 op.click("[data-act=export]")
             data = json.load(open(dl.value.path(), encoding="utf-8"))
@@ -1159,6 +1186,7 @@ try:
             op.wait_for_timeout(900)
             check("appearance: kept on import", op.get_attribute("html", "data-theme") == "dark")
             # reload keeps it (boot script, before settings load)
+            nav(op, "appearance")
             op.reload()
             check("appearance: applied before first paint after reload", op.evaluate("document.documentElement.dataset.theme") == "dark")
             op.wait_for_timeout(600)

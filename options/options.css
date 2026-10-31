@@ -94,3 +94,10 @@ main { flex: 999 1 560px; min-width: 0; max-width: 820px; padding-bottom: 120px;
 body.qa { background: var(--bg-subtle); }
 .top { background: var(--bg); }
 .tbl th { color: var(--text-2); }
+.nav.set-nav { flex: 0 0 232px; max-width: 232px; padding: 16px 0 16px 0; top: 72px; }
+.nav .nav-item { text-decoration: none; }
+.nav .nav-item .ic { color: var(--text-3); }
+.nav .nav-item[aria-current="page"] .ic { color: var(--accent-text); }
+.nav .nav-sub { padding-left: 10px; }
+.sec[hidden] { display: none; }
+.lrow:hover { background: var(--bg-subtle); }

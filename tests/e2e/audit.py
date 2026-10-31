@@ -177,6 +177,7 @@ with sync_playwright() as p:
         check("upgrade: old history entry reopens without media", panel.locator(".shots img").count() == 0)
         op = ctx.new_page(); op.on("pageerror", lambda e: logs.append(f"[options] PAGEERROR: {e}"))
         op.goto(f"chrome-extension://{EID}/options/options.html"); op.wait_for_timeout(1000)
+        op.click(".nav a[href='#usage']"); op.wait_for_timeout(250)
         ut = op.inner_text("#usage")
         check("upgrade: 1.1-style usage rows (3-part keys) still shown", "gemini-2.5-flash" in ut and " 5" in ut.replace("\t", " "), ut[:300].replace(chr(10), " | "))
         check("upgrade: settings page renders all sections", all(op.locator(f"#{s}").count() == 1 for s in ["ai", "title", "fields", "zoho", "usage", "projects", "scopes"]))

@@ -122,3 +122,7 @@ details summary { font-size: calc(12px * var(--fs)); color: var(--ink2); cursor:
 .select select { font-size: var(--t-md); }
 .toast { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: var(--z-toast); max-width: calc(100vw - 32px); }
 .tpo.is-active { background: var(--bg-muted); box-shadow: inset 2px 0 0 var(--accent); }
+.shot-item { border-radius: var(--r-md); outline-offset: 3px; }
+.shot-item[draggable="true"] { cursor: grab; }
+.shot-num { position: absolute; left: 6px; top: 6px; z-index: 2; min-width: 18px; height: 18px; padding: 0 4px; border-radius: var(--r-xs); background: rgba(20,20,22,.78); color: #fff; font-size: var(--t-2xs); font-weight: var(--fw-bold); display: flex; align-items: center; justify-content: center; }
+.shot-img .badge { left: auto; right: 6px; }

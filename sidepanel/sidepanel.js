@@ -3,7 +3,7 @@
 import { loadSettings, onSettingsChanged, PROVIDERS, applyScope } from '../lib/settings.js';
 import { listProjects, switchProject, projectForUrl } from '../lib/projects.js';
 import { generateAuto, parseJson, describeError, AIError, AUTO, cooldowns, parseSlot } from '../lib/ai.js';
-import { nearLimit, usedToday, istClock, parseLimits } from '../lib/usage.js';
+import { nearLimit, usedToday, istClock, parseLimits, summarize, limitFor, nextQuotaReset } from '../lib/usage.js';
 import { buildPrompt, buildReport, buildTitle, descriptionText, descriptionHtml, rewritePrompt, rewriteResult, locate, isText, stepsText, matchOption, looseKey, learnRule, suggestTags } from '../lib/report.js';
 import { detectEnv, fileToDataUrl, forAi, thumb } from '../lib/env.js';
 import { esc, icon, orb, beam, markSvg, applyTheme, applyAppearance, watchTheme, toast, askConfirm, copyText, downloadDataUrl, fmtTime, uid } from '../lib/ui.js';
@@ -655,10 +655,54 @@ function renderFlow() {
 }
 
 // ---------- views ----------
+// ---------- header popovers: project switcher and requests left ----------
+let menu = null;
+const pop = () => $('#pop');
+function closeMenu(focusBack = true) {
+  const was = menu; menu = null; pop().innerHTML = '';
+  $('#btn-usage')?.setAttribute('aria-expanded', 'false');
+  const pb = $('#projsel'); if (pb) pb.setAttribute('aria-expanded', 'false');
+  if (focusBack && was) ($(was === 'proj' ? '#projsel' : '#btn-usage') || document.body).focus();
+}
+async function usageRows() {
+  const { usage, learnedLimits = {} } = await chrome.storage.local.get(['usage', 'learnedLimits']);
+  const lim = { learned: learnedLimits, typed: parseLimits(S.usage.limits) };
+  const seen = new Set(), rows = [];
+  for (const r of summarize(usage, 1)) {
+    const k = `${r.model}|${r.key}`; if (seen.has(k)) continue; seen.add(k);
+    const used = usedToday(usage, r.model, r.key), l = limitFor(r.model, lim, r.key);
+    rows.push({ name: r.model + (r.key === 'backup' ? ' (backup key)' : ''), used, limit: l ? l.limit : 0, approx: !!l && l.source === 'assumed' });
+  }
+  return rows;
+}
+async function openMenu(kind) {
+  if (menu === kind) return closeMenu();
+  menu = kind;
+  if (kind === 'proj') {
+    pop().innerHTML = `<div class="popover" role="menu" aria-label="Projects" style="position:fixed;top:44px;left:48px;width:min(270px,calc(100vw - 64px));z-index:var(--z-popover)"><div class="menu-label">Projects</div>
+      ${projects.map((p) => `<button type="button" class="menu-item" role="menuitemradio" aria-checked="${p.id === BASE.meta.id}" data-action="proj-pick" data-id="${esc(p.id)}"><span style="flex:1;min-width:0" class="ellipsis">${esc(p.name)}</span>${p.id === BASE.meta.id ? `<span style="color:var(--accent-text);display:inline-flex">${icon.check}</span>` : ''}</button>`).join('')}
+      <hr class="divider" style="margin:6px 0"><button type="button" class="menu-item" role="menuitem" data-action="proj-manage">${icon.settings}Manage projects</button></div>`;
+    const pb = $('#projsel'); if (pb) pb.setAttribute('aria-expanded', 'true');
+  } else {
+    const rows = await usageRows();
+    if (menu !== 'usage') return;
+    pop().innerHTML = `<div class="popover" role="dialog" aria-label="Requests left today" style="position:fixed;top:44px;right:8px;width:min(300px,calc(100vw - 16px));z-index:var(--z-popover);padding:14px">
+      <div style="display:flex;justify-content:space-between;align-items:baseline"><span class="strong">Requests used today</span><span class="t-xs c3">Resets ${esc(istClock(nextQuotaReset()))}</span></div>
+      ${rows.length ? rows.map((r) => { const pct = r.limit ? Math.min(100, Math.round(r.used / r.limit * 100)) : 0, cls = r.limit && r.used >= r.limit ? 'is-out' : r.limit && pct >= 80 ? 'is-low' : '';
+        return `<div style="margin-top:12px"><div style="display:flex;justify-content:space-between;font-size:var(--t-sm)"><span class="mono ellipsis">${esc(r.name)}</span><span>${r.used}${r.limit ? ` of ${r.approx ? 'about ' : ''}${r.limit}` : ''}</span></div>${r.limit ? `<div class="meter ${cls}" style="margin-top:4px" role="meter" aria-valuemin="0" aria-valuemax="${r.limit}" aria-valuenow="${r.used}" aria-label="${esc(r.name)} requests used"><i style="width:${cls === 'is-out' ? 100 : pct}%"></i></div>` : ''}</div>`; }).join('') : '<p class="t-sm c3" style="margin-top:10px">No requests yet today.</p>'}
+      <p class="t-xs c3" style="margin-top:12px">Counted on this computer. Google's own count may differ slightly.</p>
+      <button type="button" class="btn btn-ghost btn-sm" data-action="usage" style="margin:6px 0 -6px -8px">Open usage details</button></div>`;
+    $('#btn-usage').setAttribute('aria-expanded', 'true');
+  }
+  pop().querySelector('[role=menuitemradio][aria-checked=true], .popover button')?.focus();
+}
+document.addEventListener('mousedown', (e) => { if (menu && !e.target.closest('#pop') && !e.target.closest('#projsel') && !e.target.closest('#btn-usage')) closeMenu(false); });
+
 function setProj() {
   const label = portalLabel();
+  const wm = document.querySelector('.wm'); if (wm) wm.hidden = projects.length > 1 && !!BASE;
   if (projects.length > 1 && BASE) {
-    $('#proj').innerHTML = `<select id="projsel" class="projsel" aria-label="Project">${projects.map((p) => `<option value="${esc(p.id)}" ${p.id === BASE.meta.id ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select>${S.scope ? `<span class="hint"> · ${esc(S.scope)}</span>` : ''}`;
+    $('#proj').innerHTML = `<button type="button" id="projsel" class="proj-btn" data-action="proj-menu" aria-haspopup="menu" aria-expanded="${menu === 'proj'}" aria-label="Project: ${esc(BASE.meta.name)}. Switch project"><span class="ellipsis">${esc(BASE.meta.name)}</span>${S.scope ? `<span class="proj-code">${esc(S.scope)}</span>` : ''}<svg class="ic ic-14" viewBox="0 0 16 16" aria-hidden="true" style="color:var(--text-3)"><path d="M4 6l4 4 4-4"/></svg></button>`;
   } else $('#proj').textContent = label;
 }
 async function refreshProjects() { try { projects = await listProjects(); } catch (e) { projects = []; } setProj(); }
@@ -793,8 +837,8 @@ function renderCaptured() {
         <button type="button" class="btn btn-ghost btn-sm" data-action="file">${icon.plus}Add</button>
         ${recButtons()}
       </span></div>
-    ${n ? `<div class="shots">${st.shots.map((s, i) => `<div>
-      <div class="shot-img"><img src="${s.thumb}" alt="Screenshot ${i + 1}">${s.marks.length ? '<span class="badge">Marked up</span>' : ''}</div>
+    ${n ? `<div class="shots">${st.shots.map((s, i) => `<div class="shot-item" draggable="${n > 1}" data-shot="${s.id}" ${n > 1 ? `tabindex="0" role="group" aria-label="Screenshot ${i + 1} of ${n}. Alt plus arrow keys move it."` : ''}>
+      <div class="shot-img"><span class="shot-num" aria-hidden="true">${i + 1}</span><img src="${s.thumb}" alt="Screenshot ${i + 1}" draggable="false">${s.marks.length ? '<span class="badge">Marked up</span>' : ''}</div>
       <div class="shot-actions">
         <button type="button" class="btn btn-ghost btn-sm" data-action="markup" data-id="${s.id}" aria-label="Mark up screenshot ${i + 1}">${icon.pen}Mark up</button>
         <button type="button" class="btn btn-ghost btn-sm" data-action="remove" data-id="${s.id}" aria-label="Remove screenshot ${i + 1}">${icon.trash}Remove</button>
@@ -1113,6 +1157,10 @@ document.addEventListener('click', async (e) => {
   switch (a) {
     case 'capture': return captureTab();
     case 'file': return $('#file').click();
+    case 'proj-menu': return openMenu('proj');
+    case 'usage-menu': return openMenu('usage');
+    case 'proj-pick': closeMenu(); return switchProject(id).catch((err) => toast(err.message, 3000));
+    case 'proj-manage': closeMenu(false); return chrome.tabs.create({ url: chrome.runtime.getURL('options/options.html#projects') });
     case 'settings': return chrome.runtime.openOptionsPage();
     case 'usage': return chrome.tabs.create({ url: chrome.runtime.getURL('options/options.html#usage') });
     case 'setup': return chrome.tabs.create({ url: chrome.runtime.getURL('options/welcome.html') });
@@ -1202,9 +1250,32 @@ document.addEventListener('input', (e) => {
   if (t.dataset.seg) { st.report.segments[t.dataset.seg] = t.value; updateTitlePreview(); saveDraft(); return; }
   if (t.dataset.sec) { const s = st.report.sections.find((x) => x.id === t.dataset.sec); if (s) s.text = t.value; saveDraft(); }
 });
+// Reorder screenshots: drag one onto another, or focus one and press Alt + an arrow key.
+function moveShot(id, to) {
+  const i = st.shots.findIndex((s) => s.id === id); if (i < 0) return;
+  const j = Math.max(0, Math.min(st.shots.length - 1, to)); if (i === j) return;
+  const [s] = st.shots.splice(i, 1); st.shots.splice(j, 0, s);
+  saveDraft(); render();
+  document.querySelector(`[data-shot="${id}"]`)?.focus();
+  toast(`Screenshot moved to position ${j + 1}`, 1400);
+}
+let dragShot = null;
+document.addEventListener('dragstart', (e) => { const el = e.target.closest?.('[data-shot]'); if (!el) return; dragShot = el.dataset.shot; e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', dragShot); el.style.opacity = '.5'; });
+document.addEventListener('dragend', (e) => { const el = e.target.closest?.('[data-shot]'); if (el) el.style.opacity = ''; dragShot = null; });
+document.addEventListener('dragover', (e) => { if (dragShot && e.target.closest?.('[data-shot]')) e.preventDefault(); });
+document.addEventListener('drop', (e) => {
+  const el = e.target.closest?.('[data-shot]'); if (!dragShot || !el) return;
+  e.preventDefault(); e.stopPropagation();
+  const id = dragShot; dragShot = null; moveShot(id, st.shots.findIndex((s) => s.id === el.dataset.shot));
+}, true);
+document.addEventListener('keydown', (e) => {
+  const el = e.target.closest?.('[data-shot]');
+  if (!el || !e.altKey || (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight' && e.key !== 'ArrowUp' && e.key !== 'ArrowDown')) return;
+  e.preventDefault(); const i = st.shots.findIndex((s) => s.id === el.dataset.shot);
+  moveShot(el.dataset.shot, i + (e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? -1 : 1));
+});
 document.addEventListener('change', (e) => {
   const t = e.target;
-  if (t.id === 'projsel') { switchProject(t.value).catch((err) => toast(err.message, 3000)); return; }
   if (t.dataset.field) {
     st.report.fields[t.dataset.field] = t.value; st.report.aiChosen[t.dataset.field] = false;
     (st.report.touched = st.report.touched || {})[t.dataset.field] = !!t.value; saveDraft();
@@ -1255,6 +1326,7 @@ document.addEventListener('keydown', (e) => {
     return;
   }
   if ((e.ctrlKey || e.metaKey) && e.key === ',') { e.preventDefault(); chrome.runtime.openOptionsPage(); return; }
+  if (e.key === 'Escape' && menu) { e.preventDefault(); closeMenu(); return; }
   if (e.key === 'Escape' && st.view === 'writing') { ctrl && ctrl.abort(); }
 });
 document.addEventListener('paste', (e) => {
@@ -1282,6 +1354,7 @@ chrome.runtime.onMessage.addListener((msg) => {
 (async function start() {
   $('#mark').innerHTML = markSvg(20);
   $('#btn-history').innerHTML = icon.clock;
+  $('#btn-usage').innerHTML = icon.gauge;
   $('#btn-bugs').innerHTML = icon.list;
   $('#btn-settings').innerHTML = icon.settings;
   BASE = await loadSettings(); S = BASE;

@@ -193,8 +193,12 @@ function finished() {
 
 const SCREENS = { start, import: importStep, agent: agentStep, name: nameStep, title: titleStep, sections: sectionsStep, fields: fieldsStep, tags: tagsStep, style: styleStep, review: reviewStep };
 function render() {
-  const n = steps().length;
-  $('#dots').innerHTML = n > 1 ? steps().map((s, i) => `<i class="${i <= W.step ? 'on' : ''}"></i>`).join('') : '';
+  
+  const hand = W.route === 'hand' && !W.done;
+  $('#wzgrid').classList.toggle('has-steps', hand);
+  const LABEL = { name: 'Name and sites', title: 'Title', sections: 'Sections', fields: 'Dropdowns', tags: 'Tags', style: 'Style example', review: 'Review' };
+  $('#dots').innerHTML = hand ? steps().slice(1).map((s, i) => { const at = i + 1, done = at < W.step, now = at === W.step;
+    return `<button type="button" class="vstep ${now ? 'is-current' : done ? 'is-done' : ''}" ${now ? 'aria-current="step"' : ''} ${done ? `data-go="jump" data-id="${at}"` : 'disabled'}><span class="step-dot">${done ? '<svg class="ic" viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8.5l3 3 6-7"/></svg>' : at}</span>${LABEL[s] || s}</button>`; }).join('') : '';
   $('#step').innerHTML = W.done ? finished() : SCREENS[cur()]();
   applyTheme();
   const f = $('#step input:not([type=checkbox]), #step textarea, #step select');
@@ -229,6 +233,7 @@ document.addEventListener('click', async (e) => {
   if (!b || b.getAttribute('aria-disabled') === 'true') return;
   const go = b.dataset.go, id = b.dataset.id;
   if (go === 'route') { W.route = id; W.step = 1; W.note = null; return render(); }
+  if (go === 'jump') { W.step = Number(id); W.note = null; return render(); }
   if (go === 'next') { W.step = Math.min(steps().length - 1, W.step + 1); return render(); }
   if (go === 'back') { if (W.step <= 1) { W.route = ''; W.step = 0; W.note = null; } else W.step -= 1; return render(); }
   if (go === 'pick') return $('#pick-file').click();

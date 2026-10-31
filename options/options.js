@@ -14,6 +14,50 @@ let S, P = [], importNotes = null;
 let keyShown = false, modelStatus = null, keyTimer = 0;
 let U = { usage: {}, learnedLimits: {}, cool: {} }, usageDays = 1;
 
+// ---------- navigation: one page at a time, with an icon for each ----------
+const IC = {
+  folder: 'M2 4.5h4l1.3 1.5H14v7H2z', key: 'M5.5 10.5a3 3 0 1 0 0-6a3 3 0 1 0 0 6 M8.3 7.5h5.2v2 M11.5 7.5v1.5', gauge: 'M2.8 11.5a5.5 5.5 0 1 1 10.4 0 M8 9l2.2-2.2',
+  sun: 'M8 10.5a2.5 2.5 0 1 0 0-5a2.5 2.5 0 1 0 0 5 M8 1.5v1.5 M8 13v1.5 M1.5 8H3 M13 8h1.5 M3.4 3.4l1 1 M11.6 11.6l1 1 M3.4 12.6l1-1 M11.6 4.4l1-1',
+  title: 'M3 4h10 M3 8h7 M3 12h4', sections: 'M3 3.5h10 M3 6.5h10 M3 9.5h10 M3 12.5h6', fields: 'M2.5 4h11v3.5h-11z M2.5 9.5h11V13h-11z M11 5.5l.7.7.7-.7',
+  tag: 'M2.5 2.5h5.3l5.7 5.7-5.3 5.3-5.7-5.7z M5.5 5.5h.01', style: 'M3 13.5c2-1 2.5-3 4-4.5l4.5-6 1.5 1.5-6 4.5C5.5 10.5 4 11 3 13.5z',
+  link: 'M6.5 9.5l3-3 M7 4.5l1-1a2.8 2.8 0 0 1 4 4l-1 1 M9 11.5l-1 1a2.8 2.8 0 0 1-4-4l1-1',
+  globe: 'M8 14a6 6 0 1 0 0-12a6 6 0 1 0 0 12 M2 8h12 M8 2c1.7 1.8 2.5 3.8 2.5 6S9.7 12.2 8 14C6.3 12.2 5.5 10.2 5.5 8S6.3 3.8 8 2',
+  search: 'M7 12a5 5 0 1 0 0-10a5 5 0 1 0 0 10 M10.6 10.6L14 14', chevDown: 'M4 6l4 4 4-4', chevRight: 'M6 4l4 4-4 4'
+};
+const ic = (n, cls = '') => `<svg class="ic ${cls}" viewBox="0 0 16 16" aria-hidden="true"><path d="${IC[n]}"></path></svg>`;
+// [section id, label, icon, the sections shown on that page]
+const MAIN_NAV = [['projects', 'Projects', 'folder', ['projects']], ['ai', 'AI and key', 'key', ['ai', 'length']], ['usage', 'Usage', 'gauge', ['usage']], ['appearance', 'Appearance', 'sun', ['appearance']]];
+const FMT_NAV = [['scopes', 'Sites and portals', 'globe', ['scopes']], ['title', 'Title format', 'title', ['title']], ['sections', 'Description sections', 'sections', ['sections']], ['fields', 'Fields', 'fields', ['fields']], ['tags', 'Tags', 'tag', ['tags']], ['style', 'Style example', 'style', ['style']], ['zoho', 'Zoho labels', 'link', ['zoho']]];
+const ALL_NAV = [...MAIN_NAV, ...FMT_NAV];
+const INDEX = [
+  ['Main key', 'AI and key', 'ai', 'key'], ['Backup key', 'AI and key', 'ai', 'key'], ['Model', 'AI and key', 'ai', 'key'], ['Writing length', 'AI and key', 'ai', 'key'], ['Page errors', 'AI and key', 'length', 'key'],
+  ['Requests left per key', 'Usage', 'usage', 'gauge'], ['Theme', 'Appearance', 'appearance', 'sun'], ['Text size', 'Appearance', 'appearance', 'sun'], ['Reduce motion', 'Appearance', 'appearance', 'sun'],
+  ['Import a project file', 'Projects', 'projects', 'folder'], ['Export this project', 'Projects', 'projects', 'folder'], ['Download setup guide', 'Projects', 'projects', 'folder'], ['Set up a new project', 'Projects', 'projects', 'folder'],
+  ['Title format', 'Format of this project', 'title', 'title'], ['Separator', 'Format › Title format', 'title', 'title'], ['Description sections', 'Format of this project', 'sections', 'sections'],
+  ['Fields and choices', 'Format of this project', 'fields', 'fields'], ['Tags', 'Format of this project', 'tags', 'tag'], ['Zoho labels', 'Format of this project', 'zoho', 'link'], ['Sites and portals', 'Format of this project', 'scopes', 'globe']
+];
+const pageOf = (id) => (ALL_NAV.find((n) => n[3].includes(id)) || MAIN_NAV[1])[0];
+let curPage = pageOf((location.hash || '').slice(1) || 'ai'), fmtOpen = true, query = '';
+function navHtml() {
+  const item = (n, sub = false) => `<a class="nav-item${sub ? ' nav-sub' : ''}" href="#${n[0]}" ${curPage === n[0] && !query ? 'aria-current="page"' : ''}>${ic(n[2], sub ? 'ic-14' : '')}${esc(n[1])}</a>`;
+  return `<div class="search" style="margin-bottom:10px">${ic('search')}<input class="field" id="nav-q" type="search" style="height:32px" placeholder="Search settings" aria-label="Search settings" value="${esc(query)}"></div>
+  ${MAIN_NAV.map((n) => item(n)).join('')}
+  <button type="button" class="nav-group" id="fmt-toggle" aria-expanded="${fmtOpen}" style="border:0;background:transparent;cursor:pointer;width:100%"><span>Format of this project · <span class="mono">${esc((S.title && S.title.project) || '')}</span></span>${ic(fmtOpen ? 'chevDown' : 'chevRight', 'ic-14')}</button>
+  ${fmtOpen ? FMT_NAV.map((n) => item(n, true)).join('') : '<p class="t-xs c3" style="padding:0 10px">Usually set once by the team lead. Open to change the title, sections, fields and tags.</p>'}`;
+}
+function resultsHtml() {
+  const q = query.trim().toLowerCase();
+  const hits = INDEX.filter((r) => (r[0] + ' ' + r[1]).toLowerCase().includes(q));
+  return `<section class="sec" id="results"><div><h2>Results for “${esc(query)}”</h2><p class="desc">${hits.length} setting${hits.length === 1 ? '' : 's'} match.</p></div>
+  <div>${hits.map((r) => `<a class="lrow" href="#${r[2]}" data-result="${r[2]}" style="color:var(--text);text-decoration:none"><span class="c3">${ic(r[3])}</span><div style="flex:1"><div class="medium">${esc(r[0])}</div><div class="t-sm c3">${esc(r[1])}</div></div><span class="c3">${ic('chevRight')}</span></a>`).join('') || '<p class="hint">Nothing matches. Try “key”, “theme” or “tags”.</p>'}</div></section>`;
+}
+function applyPage() {
+  const show = query.trim() ? ['results'] : (ALL_NAV.find((n) => n[0] === curPage) || MAIN_NAV[1])[3];
+  document.querySelectorAll('main > .sec').forEach((el) => { el.hidden = !show.includes(el.id); });
+  const nav = $('#nav'); if (nav) { const q = document.getElementById('nav-q'); const keep = q && document.activeElement === q ? [q.selectionStart, q.selectionEnd] : null; nav.innerHTML = navHtml(); if (keep) { const n = document.getElementById('nav-q'); n.focus(); n.setSelectionRange(...keep); } }
+}
+function showPage(id) { query = ''; curPage = pageOf(id); history.replaceState(null, '', '#' + id); render(); scrollTo(0, 0); }
+
 // ---------- saving ----------
 let t = 0;
 function save() {
@@ -324,8 +368,8 @@ function render() {
   const a = document.activeElement;
   const keep = a && a.id && main.contains(a) ? { id: a.id, s: a.selectionStart, e: a.selectionEnd } : null;
   main.innerHTML = secAI() + secProjects() + secLength() + secUsage() + secAppearance()
-    + `<details class="adv" id="advanced"${advOpen ? ' open' : ''}><summary><span class="adv-t"><span class="adv-c" aria-hidden="true">${icon.chevron}</span>Format of this project</span><span class="adv-d">Where it applies, portals, title format, sections, fields, tags and Zoho labels. Everything a project file sets can be changed here.</span></summary><div class="adv-go"><a class="btn btn-secondary btn-sm" href="project-setup.html" style="margin:0 0 14px">Set up a new project</a> <span class="hint">New to this? Answer a few questions, or let an AI agent write the file.</span></div>`
-    + secScopes() + secTitle() + secSections() + secFields() + secTags() + secStyle() + secZoho() + '</details>';
+    + secScopes() + secTitle() + secSections() + secFields() + secTags() + secStyle() + secZoho() + (query.trim() ? resultsHtml() : '');
+  applyPage();
   applyTheme();
   scrollTo(0, y);
   if (keep) {
@@ -336,19 +380,16 @@ function render() {
 
 // ---------- events ----------
 // The team-format sections sit in one collapsed group so a new user sees only the key, length, usage and look.
-let advOpen = false;
-function openAdvanced(target) {
-  const d = document.getElementById('advanced');
-  if (!d || !target || !d.contains(target)) return;
-  advOpen = true; d.open = true;
-}
-document.addEventListener('toggle', (e) => { if (e.target.id === 'advanced') advOpen = e.target.open; }, true);
 document.addEventListener('click', (e) => {
-  const a = e.target.closest('.nav a[href^="#"]');
+  const tg = e.target.closest('#fmt-toggle');
+  if (tg) { fmtOpen = !fmtOpen; applyPage(); return; }
+  const a = e.target.closest('.nav a[href^="#"], a[data-result]');
   if (!a) return;
-  const t = document.querySelector(a.getAttribute('href'));
-  if (!t) return;
-  e.preventDefault(); openAdvanced(t); t.scrollIntoView(); history.replaceState(null, '', a.getAttribute('href'));
+  e.preventDefault(); showPage(a.getAttribute('href').slice(1));
+});
+document.addEventListener('input', (e) => {
+  if (e.target.id !== 'nav-q') return;
+  query = e.target.value; render();
 });
 document.addEventListener('input', (e) => {
   const el = e.target;
@@ -514,22 +555,14 @@ async function doImport(el) {
     importNotes = { title: `${update ? 'Updated' : 'Imported'} “${r.name}”${r.warnings.length ? `, with ${r.warnings.length} thing${r.warnings.length === 1 ? '' : 's'} to check` : ''}.`, items: r.warnings };
     render();
     toast(`${update ? 'Updated' : 'Imported'} “${r.name}”`, 2800);
-    document.getElementById('projects')?.scrollIntoView();
+    showPage('projects');
   } catch (e) {
     importNotes = { title: 'The file was not imported.', items: String(e.message).split(/(?<=\.)\s+(?=["A-Z])/) };
-    render();
-    document.getElementById('projects')?.scrollIntoView();
+    showPage('projects');
   }
 }
 
-// nav highlight
-function navSpy() {
-  const secs = [...document.querySelectorAll('.sec')];
-  let cur = secs[0];
-  for (const s of secs) if (s.getClientRects().length && s.getBoundingClientRect().top < 140) cur = s;
-  document.querySelectorAll('.nav a').forEach((a) => a.classList.toggle('cur', cur && a.getAttribute('href') === '#' + cur.id));
-}
-addEventListener('scroll', navSpy, { passive: true });
+
 
 (async function start() {
   $('#mark').innerHTML = markSvg(24);
@@ -538,15 +571,13 @@ addEventListener('scroll', navSpy, { passive: true });
   applyAppearance(S);
   await loadUsage();
   render();
-  navSpy();
   chrome.storage.onChanged.addListener(async (c, area) => {
     if (area === 'local' && (c.usage || c.learnedLimits || c.modelCooldown)) {
       await loadUsage();
       const old = document.getElementById('usage');
-      if (old && !old.contains(document.activeElement)) { old.outerHTML = secUsage(); applyTheme(); } else if (!old) render();
+      if (old && !old.contains(document.activeElement)) { old.outerHTML = secUsage(); applyPage(); applyTheme(); } else if (!old) render();
     }
     if (area === 'local' && c.settings) applyAppearance(normalize(c.settings.newValue));
   });
   watchTheme();
-  if (location.hash) { const t = document.querySelector(location.hash); openAdvanced(t); t?.scrollIntoView(); }
 })();
