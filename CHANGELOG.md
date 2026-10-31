@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.5.0 · 2026-10-31
 - **New look across the side panel, Settings, setup, the project wizard and the AI Studio helper card**, from the redesign: one orange accent, warmer greys, light and dark that follow the same tokens, a 3-step bar with a line between the steps, banners for notices, cards for sections and a clearer Draft badge in the review footer.
 - **Fields show who set them**: each dropdown says *AI* (orange tint), *You* (after you change it), *Default* or *Empty* (dashed). Picking Leave empty marks it Empty.
 - **Plainer wording**: Save and capture next, Export to Word, Fill in Zoho, Draft instead of Ready, Zoho does not take tags from forms, Filled in Zoho with a note that QArator never submits.
