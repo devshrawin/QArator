@@ -3,11 +3,12 @@ import { esc, icon } from '../lib/ui.js';
 import { loadImage } from '../lib/env.js';
 
 const MARK = '#FF6A2B';
-const NAMES = { box: 'Box', arrow: 'Arrow', hide: 'Hidden area' };
+const NAMES = { box: 'Box', arrow: 'Arrow', hide: 'Hidden area', crop: 'Crop' };
 const HINTS = {
   box: 'Drag to draw a box around the problem. Drag a mark to move it; Delete removes the selected mark.',
   arrow: 'Drag from where the arrow starts to the thing it points at.',
-  hide: 'Drag over personal data such as ID numbers. It is blacked out in the saved image, not just covered.'
+  hide: 'Drag over personal data such as ID numbers. It is blacked out in the saved image, not just covered.',
+  crop: 'Drag around the part of the page that matters. Everything outside is cut away when you press Apply.'
 };
 
 function drawMarks(ctx, marks, sw, selected = -1, k = 1) {
@@ -46,13 +47,13 @@ export async function flatten(original, marks) {
 }
 const strokeFor = (w) => Math.max(3, Math.round(w / 420));
 
-export async function openMarkup(shot, index, total, { onApply, onCancel }) {
+export async function openMarkup(shot, index, total, { onApply, onCancel, startTool = 'box' }) {
   const host = document.getElementById('overlay');
   const original = shot.original || shot.dataUrl;
   const img = await loadImage(original);
   const W = img.naturalWidth, H = img.naturalHeight, SW = strokeFor(W);
   let marks = JSON.parse(JSON.stringify(shot.marks || []));
-  let tool = 'box', selected = marks.length ? marks.length - 1 : -1;
+  let tool = startTool, selected = marks.length ? marks.length - 1 : -1, cropRect = null;
   const undo = [];
   const prevFocus = document.activeElement;
 
@@ -63,6 +64,7 @@ export async function openMarkup(shot, index, total, { onApply, onCancel }) {
       <button type="button" class="tool" data-tool="box" aria-pressed="true">${icon.box}Box <span class="k">B</span></button>
       <button type="button" class="tool" data-tool="arrow" aria-pressed="false">${icon.arrow}Arrow <span class="k">A</span></button>
       <button type="button" class="tool" data-tool="hide" aria-pressed="false">${icon.hide}Hide <span class="k">H</span></button>
+      <button type="button" class="tool" data-tool="crop" aria-pressed="false">${icon.crop}Crop <span class="k">C</span></button>
       <span class="vsep"></span>
       <button type="button" class="ib" data-mk="undo" aria-label="Undo (Ctrl+Z)" title="Undo (Ctrl+Z)">${icon.undo}</button>
     </div>
@@ -95,6 +97,12 @@ export async function openMarkup(shot, index, total, { onApply, onCancel }) {
     ctx.clearRect(0, 0, W, H);
     ctx.drawImage(img, 0, 0);
     drawMarks(ctx, marks, SW, selected, k);
+    if (cropRect) {
+      const x = Math.min(cropRect.x1, cropRect.x2), y = Math.min(cropRect.y1, cropRect.y2), w = Math.abs(cropRect.x2 - cropRect.x1), h = Math.abs(cropRect.y2 - cropRect.y1);
+      ctx.fillStyle = 'rgba(0,0,0,.55)';
+      ctx.fillRect(0, 0, W, y); ctx.fillRect(0, y + h, W, H - y - h); ctx.fillRect(0, y, x, h); ctx.fillRect(x + w, y, W - x - w, h);
+      ctx.strokeStyle = '#fff'; ctx.lineWidth = 2 / k; ctx.setLineDash([6 / k, 4 / k]); ctx.strokeRect(x, y, w, h); ctx.setLineDash([]);
+    }
   }
   function list() {
     const el = wrap.querySelector('#mk-list');
@@ -139,14 +147,17 @@ export async function openMarkup(shot, index, total, { onApply, onCancel }) {
   let drag = null;
   canvas.addEventListener('pointerdown', (e) => {
     canvas.setPointerCapture(e.pointerId);
-    const p = toImg(e); const h = hit(p);
+    const p = toImg(e);
+    if (tool === 'crop') { cropRect = { x1: p.x, y1: p.y, x2: p.x, y2: p.y }; drag = { mode: 'crop' }; draw(); return; }
+    const h = hit(p);
     snapshot();
     if (h >= 0) { selected = h; drag = { mode: 'move', p, orig: { ...marks[h] } }; }
     else { marks.push({ type: tool, x1: p.x, y1: p.y, x2: p.x, y2: p.y }); selected = marks.length - 1; drag = { mode: 'new' }; }
     refresh();
   });
   canvas.addEventListener('pointermove', (e) => {
-    if (!drag) { canvas.style.cursor = hit(toImg(e)) >= 0 ? 'move' : 'crosshair'; return; }
+    if (!drag) { canvas.style.cursor = tool !== 'crop' && hit(toImg(e)) >= 0 ? 'move' : 'crosshair'; return; }
+    if (drag.mode === 'crop') { const p = toImg(e); cropRect.x2 = p.x; cropRect.y2 = p.y; draw(); return; }
     const p = toImg(e), m = marks[selected];
     if (drag.mode === 'new') { m.x2 = p.x; m.y2 = p.y; }
     else { const dx = p.x - drag.p.x, dy = p.y - drag.p.y; Object.assign(m, { x1: drag.orig.x1 + dx, x2: drag.orig.x2 + dx, y1: drag.orig.y1 + dy, y2: drag.orig.y2 + dy }); }
@@ -154,6 +165,7 @@ export async function openMarkup(shot, index, total, { onApply, onCancel }) {
   });
   const end = () => {
     if (!drag) return;
+    if (drag.mode === 'crop') { if (Math.hypot(cropRect.x2 - cropRect.x1, cropRect.y2 - cropRect.y1) * k < 12) cropRect = null; drag = null; draw(); return; }
     const m = marks[selected];
     if (drag.mode === 'new' && Math.hypot(m.x2 - m.x1, m.y2 - m.y1) * k < 6) { marks.pop(); selected = marks.length - 1; undo.pop(); }
     else if (drag.mode === 'move' && m.x1 === drag.orig.x1 && m.y1 === drag.orig.y1) undo.pop();
@@ -163,9 +175,18 @@ export async function openMarkup(shot, index, total, { onApply, onCancel }) {
   canvas.addEventListener('pointercancel', end);
 
   async function apply() {
-    const dataUrl = marks.length ? await flatten(original, marks) : original;
+    let base = original, mk = marks;
+    if (cropRect) {
+      const x = Math.round(Math.min(cropRect.x1, cropRect.x2)), y = Math.round(Math.min(cropRect.y1, cropRect.y2));
+      const w = Math.max(1, Math.round(Math.abs(cropRect.x2 - cropRect.x1))), h = Math.max(1, Math.round(Math.abs(cropRect.y2 - cropRect.y1)));
+      const c = document.createElement('canvas'); c.width = w; c.height = h;
+      c.getContext('2d').drawImage(img, x, y, w, h, 0, 0, w, h);
+      base = c.toDataURL('image/png');
+      mk = marks.map((m) => ({ ...m, x1: m.x1 - x, x2: m.x2 - x, y1: m.y1 - y, y2: m.y2 - y }));
+    }
+    const dataUrl = mk.length ? await flatten(base, mk) : base;
     close();
-    onApply({ dataUrl, marks, original });
+    onApply({ dataUrl, marks: mk, original: base });
   }
   function close() {
     document.removeEventListener('keydown', onKey, true);
@@ -179,7 +200,7 @@ export async function openMarkup(shot, index, total, { onApply, onCancel }) {
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); if (undo.length) { marks = JSON.parse(undo.pop()); selected = Math.min(selected, marks.length - 1); refresh(); } return; }
     if (e.ctrlKey || e.metaKey || e.altKey) return;
     const key = e.key.toLowerCase();
-    if (key === 'b') setTool('box'); else if (key === 'a') setTool('arrow'); else if (key === 'h') setTool('hide');
+    if (key === 'b') setTool('box'); else if (key === 'a') setTool('arrow'); else if (key === 'h') setTool('hide'); else if (key === 'c') setTool('crop');
     else if ((e.key === 'Delete' || e.key === 'Backspace') && selected >= 0) { e.preventDefault(); snapshot(); marks.splice(selected, 1); selected = marks.length - 1; refresh(); }
     else if (e.key.startsWith('Arrow') && selected >= 0 && document.activeElement === canvas) {
       e.preventDefault(); snapshot();
@@ -199,6 +220,6 @@ export async function openMarkup(shot, index, total, { onApply, onCancel }) {
   });
   document.addEventListener('keydown', onKey, true);
   addEventListener('resize', layout);
-  setTool('box');
+  setTool(tool);
   requestAnimationFrame(() => { layout(); list(); canvas.focus(); });
 }

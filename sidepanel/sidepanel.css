@@ -118,6 +118,7 @@ details summary { font-size: calc(12px * var(--fs)); color: var(--ink2); cursor:
 .foot-meta { padding-bottom: 2px; }
 .dock .foot-meta + .btn { margin-top: 0; }
 .cap-grid { margin: 0; }
+.cap-grid:has(> :nth-child(4)) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .think-step .tick canvas { width: 16px !important; height: 16px !important; }
 .select select { font-size: var(--t-md); }
 .toast { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: var(--z-toast); max-width: calc(100vw - 32px); }

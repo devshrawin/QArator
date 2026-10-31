@@ -248,6 +248,16 @@ try:
             check("thumbnails: Alt + arrow moves a screenshot", len(o1) == 2 and o2 == o1[::-1], f"{o1} -> {o2}")
             panel.locator(".shot-actions [data-action=remove]").last.click(); panel.wait_for_timeout(300)
             check("thumbnails: back to one screenshot", panel.locator(".shots img").count() == 1)
+            # region: capture, then crop
+            panel.click("#main [data-action=region]"); panel.wait_for_selector("#mk-canvas", timeout=8000); panel.wait_for_timeout(400)
+            check("region: opens straight in the crop tool", panel.get_attribute("[data-tool=crop]", "aria-pressed") == "true")
+            bb = panel.locator("#mk-canvas").bounding_box()
+            panel.mouse.move(bb["x"] + bb["width"] * 0.1, bb["y"] + bb["height"] * 0.1); panel.mouse.down()
+            panel.mouse.move(bb["x"] + bb["width"] * 0.6, bb["y"] + bb["height"] * 0.5, steps=5); panel.mouse.up()
+            panel.keyboard.press("Enter"); panel.wait_for_timeout(1200)
+            dims = panel.evaluate("""async () => { const d = (await chrome.storage.local.get('draft')).draft; const out = []; for (const s of d.shots) { const i = new Image(); i.src = s.dataUrl; await i.decode(); out.push([i.naturalWidth, i.naturalHeight]); } return out; }""")
+            check("region: the new screenshot is only the chosen part", len(dims) == 2 and dims[1][0] < dims[0][0] * 0.7 and dims[1][1] < dims[0][1] * 0.7, str(dims))
+            panel.locator(".shot-actions [data-action=remove]").last.click(); panel.wait_for_timeout(300)
         phase(capture)
 
         def write_gemini():
@@ -855,7 +865,9 @@ try:
             imp = os.path.join(OUT, "import.json"); json.dump(data, open(imp, "w"))
             rows0 = op.locator(".prow").count()
             op.set_input_files("#import-file", imp)
-            op.wait_for_timeout(800)
+            op.wait_for_timeout(500)
+            check("import: a project with the same id asks update or copy in the page", op.locator(".modal [data-yes]").count() == 1 and "already here" in op.inner_text(".modal"))
+            op.click(".modal [data-no]"); op.wait_for_timeout(800)
             check("import: applies format, keeps key", val(op, "#tproj") == "IMPORTED" and val(op, "#key") == "sk-test-0000000000000000000000")
             check("import: same project id is added as a copy, not over the original", op.locator(".prow").count() == rows0 + 1, f"{rows0} -> {op.locator('.prow').count()}")
             check("import: existing project is still there", "UR" in op.locator(".prow input").first.input_value() or op.locator(".prow input").count() == 2)
@@ -936,12 +948,13 @@ try:
             op.screenshot(path=os.path.join(OUT, "12-projects.png"))
             # delete a project, and the last one cannot be deleted
             before = op.locator(".prow").count()
-            op.once("dialog", lambda d: d.accept())
-            op.locator("[data-act=pj-del]:not([disabled])").last.click(); op.wait_for_timeout(900)
+            op.locator("[data-act=pj-del]:not([disabled])").last.click(); op.wait_for_timeout(300)
+            check("settings: deleting a project asks in the page first", op.locator(".modal [data-yes]").count() == 1)
+            op.click(".modal [data-yes]"); op.wait_for_timeout(900)
             check("projects: delete removes one", op.locator(".prow").count() == before - 1, f"{before} -> {op.locator('.prow').count()}")
             # neutral new project
-            op.once("dialog", lambda d: d.accept("Fresh"))
-            op.click("[data-act=pj-new]"); op.wait_for_timeout(900)
+            op.click("[data-act=pj-new]"); op.wait_for_timeout(300)
+            op.fill("#tx-i", "Fresh"); op.keyboard.press("Enter"); op.wait_for_timeout(900)
             neu = ev("async () => { const s = (await chrome.storage.local.get('settings')).settings; return [s.meta.name, s.tags.list.length, s.urlRules.length, s.title.project]; }")
             check("projects: New blank project starts neutral", neu[0] == "Fresh" and neu[1] == 0 and neu[2] == 0 and neu[3] == "APP", str(neu))
             # the panel header switches projects
@@ -1183,7 +1196,9 @@ try:
             data["appearance"] = {"theme": "light"}
             imp = os.path.join(OUT, "import-ap.json"); json.dump(data, open(imp, "w"))
             op.set_input_files("#import-file", imp)
-            op.wait_for_timeout(900)
+            op.wait_for_timeout(500)
+            if op.locator(".modal [data-no]").count(): op.click(".modal [data-no]")
+            op.wait_for_timeout(700)
             check("appearance: kept on import", op.get_attribute("html", "data-theme") == "dark")
             # reload keeps it (boot script, before settings load)
             nav(op, "appearance")
@@ -1194,6 +1209,30 @@ try:
             check("appearance: System removes the override", op.get_attribute("html", "data-theme") is None)
             panel2.close()
         phase(appearance)
+
+        def looks():
+            # dark theme on every settings page, the wizard, and the panel at its narrowest and widest
+            set_settings({"appearance": {"theme": "dark"}})
+            op = ctx.new_page(); op.goto(f"chrome-extension://{EID}/options/options.html"); op.wait_for_timeout(800)
+            for sec in ["ai", "projects", "usage", "appearance", "scopes", "title", "sections", "fields", "tags", "style", "zoho"]:
+                nav(op, sec)
+                over = op.evaluate("() => document.documentElement.scrollWidth - document.documentElement.clientWidth")
+                bg = op.evaluate("() => getComputedStyle(document.querySelector('main > .sec:not([hidden])')).backgroundColor")
+                check(f"dark settings: {sec} fits and uses the dark card", over <= 0 and bg == "rgb(32, 32, 34)", f"overflow {over}, card {bg}")
+                if sec in ("ai", "fields"):
+                    op.screenshot(path=os.path.join(OUT, f"20-dark-settings-{sec}.png"))
+            op.close()
+            w = ctx.new_page(); w.goto(f"chrome-extension://{EID}/options/project-setup.html?route=hand"); w.wait_for_timeout(600)
+            w.screenshot(path=os.path.join(OUT, "21-dark-wizard.png")); w.close()
+            pn = ctx.new_page(); pn.goto(f"chrome-extension://{EID}/sidepanel/sidepanel.html"); pn.wait_for_timeout(900)
+            for wpx in (360, 600):
+                pn.set_viewport_size({"width": wpx, "height": 820}); pn.wait_for_timeout(300)
+                over = pn.evaluate("() => document.documentElement.scrollWidth - document.documentElement.clientWidth")
+                check(f"panel at {wpx}px: no sideways scroll", over <= 0, str(over))
+                pn.screenshot(path=os.path.join(OUT, f"22-dark-panel-{wpx}.png"))
+            pn.close()
+            set_settings({"appearance": {"theme": "system"}})
+        phase(looks)
 
         ctx.close()
 finally:

@@ -751,6 +751,7 @@ async function renderEmpty() {
   <p class="hint" style="margin:4px 0 0">QArator saves the visible part of the tab with its URL and browser details${S.pageErrors ? ' and page errors' : ''}.</p></div>
   <div class="cap-grid">
     <button type="button" class="cap-btn" data-action="capture" title="Capture visible area (Alt+Shift+S)">${icon.capture}Screenshot</button>
+    <button type="button" class="cap-btn" data-action="region" title="Capture, then cut away everything but the part that matters">${icon.crop}Region</button>
     <button type="button" class="cap-btn" data-action="file">${icon.image}From file</button>
     <button type="button" class="cap-btn" data-action="record-screen" title="Record a screen, window or tab (Alt+Shift+R)" ${recording ? 'disabled' : ''}>${icon.screen}Record</button>
   </div>
@@ -834,6 +835,7 @@ function renderCaptured() {
     <div class="lbl between" style="margin-bottom:8px;flex-wrap:wrap"><span>Screenshots <span style="font-weight:400;color:var(--ink3)">${n}</span></span>
       <span style="display:flex;gap:2px;margin-right:-8px;flex-wrap:wrap">
         <button type="button" class="btn btn-ghost btn-sm" data-action="capture" title="Capture visible area (Alt+Shift+S)">${icon.capture}Capture</button>
+        <button type="button" class="btn btn-ghost btn-sm" data-action="region" title="Capture, then cut away everything but the part that matters">${icon.crop}Region</button>
         <button type="button" class="btn btn-ghost btn-sm" data-action="file">${icon.plus}Add</button>
         ${recButtons()}
       </span></div>
@@ -1168,6 +1170,20 @@ document.addEventListener('click', async (e) => {
     case 'toggle-errors': st.page.errorsIncluded = !st.page.errorsIncluded; saveDraft(); return render();
     case 'toggle-steps': st.stepsOpen = !st.stepsOpen; render(); if (st.stepsOpen) $('#steps')?.focus(); return;
     case 'remove': st.shots = st.shots.filter((s) => s.id !== id); saveDraft(); return render();
+    case 'region': {
+      if (markupOpening || $('#overlay').firstChild) return;
+      const before = st.shots.length;
+      await captureTab();
+      const shot = st.shots[st.shots.length - 1];
+      if (!shot || st.shots.length === before) return;
+      markupOpening = true;
+      try {
+        return await openMarkup(shot, st.shots.length - 1, st.shots.length, {
+          startTool: 'crop',
+          onApply: async ({ dataUrl, marks, original }) => { Object.assign(shot, { dataUrl, marks, original, thumb: await thumb(dataUrl) }); saveDraft(); render(); }
+        });
+      } finally { markupOpening = false; }
+    }
     case 'markup': {
       if (markupOpening || $('#overlay').firstChild) return;
       const i = st.shots.findIndex((s) => s.id === id);

@@ -6,7 +6,7 @@ import { cleanKey, detectProvider, openKeyPage } from '../lib/keys.js';
 import { listModels, describeError, rankModels, cooldowns, parseSlot, AUTO } from '../lib/ai.js';
 import { summarize, parsePrices, rowCost, rupees, nextQuotaReset, istClock, usedToday, limitFor, parseLimits } from '../lib/usage.js';
 import { buildTitle } from '../lib/report.js';
-import { esc, icon, beam, orb, markSvg, applyTheme, applyAppearance, watchTheme, toast, fmtTime } from '../lib/ui.js';
+import { esc, icon, beam, orb, markSvg, applyTheme, applyAppearance, watchTheme, toast, fmtTime, askConfirm, askText } from '../lib/ui.js';
 
 const $ = (s, r = document) => r.querySelector(s);
 const main = $('#main');
@@ -466,12 +466,12 @@ document.addEventListener('click', async (e) => {
     case 'rule-add': S.urlRules.push({ match: '', portal: '', module: '', page: '' }); break;
     case 'sec-up': move(S.sections, i, -1); break;
     case 'sec-down': move(S.sections, i, 1); break;
-    case 'sec-del': if (!confirm(`Delete the section “${S.sections[i].name}”?`)) return; S.sections.splice(i, 1); break;
+    case 'sec-del': if (!await askConfirm({ title: 'Delete this section?', body: `“${S.sections[i].name}” is removed from the report format.`, ok: 'Delete' })) return; S.sections.splice(i, 1); break;
     case 'sec-add': {
       let id = 'custom'; let n = 1; while (S.sections.some((s) => s.id === id)) id = `custom_${++n}`;
       S.sections.push({ id, name: 'New section', layout: 'paragraph', include: true, guide: '' }); break;
     }
-    case 'field-del': if (!confirm(`Delete the field “${S.fields[i].name}”?`)) return; S.fields.splice(i, 1); break;
+    case 'field-del': if (!await askConfirm({ title: 'Delete this field?', body: `“${S.fields[i].name}” is removed from the report format.`, ok: 'Delete' })) return; S.fields.splice(i, 1); break;
     case 'field-add': {
       let id = 'field'; let n = 1; while (S.fields.some((f) => f.id === id)) id = `field_${++n}`;
       S.fields.push({ id, name: 'New field', zohoLabel: 'New field', options: ['Option 1', 'Option 2'], default: 'Option 1', ai: false }); break;
@@ -479,7 +479,7 @@ document.addEventListener('click', async (e) => {
     case 'tag-del': S.tags.list.splice(i, 1); break;
     case 'usage-days': usageDays = i; render(); return;
     case 'usage-reset':
-      if (!confirm('Reset the usage counters? This only clears QArator\'s own tally.')) return;
+      if (!await askConfirm({ title: 'Reset the usage counters?', body: 'This only clears QArator\'s own tally. Your provider keeps its own count.', ok: 'Reset' })) return;
       await chrome.storage.local.remove(['usage', 'learnedLimits', 'modelCooldown']);
       await loadUsage(); render(); return;
     case 'get-key': return openKeyPage();
@@ -487,19 +487,19 @@ document.addEventListener('click', async (e) => {
     case 'guide': return downloadText('qarator-setup-guide.md', buildGuide(), 'text/markdown');
     case 'pj-use': await flush(); await switchProject(b.dataset.id); await reloadAll(); toast('Project switched'); return;
     case 'pj-new': {
-      const name = prompt('Name of the new project'); if (!name || !name.trim()) return;
+      const name = await askText({ title: 'New blank project', label: 'Name of the project', ok: 'Create', placeholder: 'e.g. Acme Shop' }); if (!name) return;
       await flush(); await newProject(name); await reloadAll(); toast('Project created. It starts with the neutral setup.', 3000); return;
     }
     case 'pj-del': {
       const p = P.find((x) => x.id === b.dataset.id); if (!p) return;
-      if (!confirm(`Delete the project “${p.name}”? Export it first if you may need it again. Your AI key is not affected.`)) return;
+      if (!await askConfirm({ title: `Delete ${p.name}?`, body: 'Export it first if you may need it again. Your AI key is not affected.', ok: 'Delete project' })) return;
       await flush(); await deleteProject(p.id); await reloadAll(); toast('Project deleted'); return;
     }
     case 'sc-add': { let id = 'portal', n = 1; while (S.meta.scopes.some((x) => x.id === id)) id = `portal_${++n}`; S.meta.scopes.push({ id, name: 'New portal', match: '', override: {} }); break; }
     case 'sc-del': S.meta.scopes.splice(i, 1); break;
     case 'import': return $('#import-file').click();
     case 'reset': {
-      if (!confirm('Reset this project to the neutral setup? Its sections, fields, tags and portals are cleared. Your AI key is kept.')) return;
+      if (!await askConfirm({ title: 'Reset this project?', body: 'Its sections, fields, tags and portals are cleared and it goes back to the neutral setup. Your AI key is kept.', ok: 'Reset project' })) return;
       const keep = { ai: S.ai, look: S.appearance, usage: S.usage, meta: { ...S.meta, scopes: [], sites: [] } }; S = normalize(JSON.parse(JSON.stringify(DEFAULTS))); S.ai = keep.ai; S.appearance = keep.look; S.usage = keep.usage; S.meta = keep.meta; break;
     }
     default: return;
@@ -549,7 +549,7 @@ async function doImport(el) {
   try {
     await flush();
     const same = P.find((x) => x.id === json?.meta?.id);
-    const update = !!same && confirm(`A project called “${same.name}” is already here.\n\nOK: update it with this file (your edits to it are replaced).\nCancel: add the file as a separate copy.`);
+    const update = !!same && await askConfirm({ title: `${same.name} is already here`, body: 'Update it with this file (your edits to it are replaced), or add the file as a separate copy.', ok: 'Update it', cancel: 'Add a copy', danger: false });
     const r = await addProject(json, { replace: update ? same.id : '' });
     await reloadAll();
     importNotes = { title: `${update ? 'Updated' : 'Imported'} “${r.name}”${r.warnings.length ? `, with ${r.warnings.length} thing${r.warnings.length === 1 ? '' : 's'} to check` : ''}.`, items: r.warnings };

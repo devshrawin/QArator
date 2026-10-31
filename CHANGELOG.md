@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.5.1 · 2026-10-31
+- **Settings is one page at a time**, with an icon on every menu item, a *Format of this project* group you can fold, and a **search box** that lists matching settings and opens them. The Writing length options now sit on the AI and key page.
+- **Panel header**: the project is a button that opens a menu (switch project, manage projects), and a new meter button shows requests used today per model, with the reset time.
+- **Screenshots can be reordered** by dragging, or with Alt + arrow keys, and are numbered.
+- **Region**: captures the tab, then opens straight in a new **Crop** tool so only the part that matters is kept. Crop is also in the markup toolbar (key C).
+- **Project wizard** shows a step list on the left; finished steps are ticked and can be reopened.
+- **Confirmations and name prompts happen in the page** instead of browser pop-ups: delete section, field or project, reset, update-or-copy on import, and the new project name.
+- **Fonts are bundled** (Inter and JetBrains Mono, Latin; both SIL Open Font License, see THIRD_PARTY_NOTICES.md). Other scripts use the system font.
+- Checked in dark theme on every settings page and the panel at 360 and 600 px: nothing scrolls sideways.
 ## 1.5.0 · 2026-10-31
 - **New look across the side panel, Settings, setup, the project wizard and the AI Studio helper card**, from the redesign: one orange accent, warmer greys, light and dark that follow the same tokens, a 3-step bar with a line between the steps, banners for notices, cards for sections and a clearer Draft badge in the review footer.
 - **Fields show who set them**: each dropdown says *AI* (orange tint), *You* (after you change it), *Default* or *Empty* (dashed). Picking Leave empty marks it Empty.

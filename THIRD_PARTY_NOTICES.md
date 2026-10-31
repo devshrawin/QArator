@@ -51,3 +51,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
+
+## Fonts
+
+- **Inter** (Latin subset, variable) by Rasmus Andersson, and **JetBrains Mono** (Latin subset, variable) by JetBrains, bundled in `fonts/` via the Fontsource packages. Both are licensed under the SIL Open Font License 1.1 (https://openfontlicense.org).
