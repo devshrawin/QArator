@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.6.1 · 2026-10-31
+- Store rebuild of 1.6.0 with a new version number. No behaviour change.
+
 ## 1.6.0 · 2026-10-31
 - **Marks can be edited after you draw them.** Pick a mark (click it or choose it in the list), then drag its corner squares to resize it, drag either end of an arrow to aim it, or change its **colour** (orange, red, blue, green, yellow, black) and **thickness** (thin, medium, thick). Hidden areas can be resized too. Reopen *Mark up* any time to change them again.
 - **Image editor settings** (Settings › Image editor): the default colour and thickness for new marks, with a preview.
